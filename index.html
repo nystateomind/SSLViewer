@@ -446,7 +446,7 @@
 
                 // Sanitize and update hostname input
                 let hostname = hostnameInput.value.trim();
-                hostname = hostname.replace(/^https?:\/\//i, ''); // Remove protocol
+                hostname = hostname.replace(/^.*\/\//, ''); // Remove anything with *// pattern (protocols, etc.)
                 hostname = hostname.replace(/[\/?#].*$/, ''); // Remove path/query/fragment
                 hostname = hostname.replace(/:\d+$/, ''); // Remove port if included
                 hostname = hostname.trim();
@@ -476,8 +476,10 @@
                     // Handle new response format with chainStatus and certificates
                     const chainStatus = data.chainStatus;
                     const certificates = data.certificates;
+                    const serverHeader = data.serverHeader;
 
                     renderChainStatus(chainStatus);
+                    renderServerHeader(serverHeader);
                     renderCertificates(certificates);
 
                     // Run SSLyze scan if checkbox is checked
@@ -543,6 +545,23 @@
                         resultsContainer.appendChild(node);
                     }
                 }
+            };
+
+            const renderServerHeader = (serverHeader) => {
+                if (!serverHeader) return;
+
+                const serverDiv = document.createElement('div');
+                serverDiv.className = 'bg-slate-100 border border-slate-300 text-slate-700 p-3 rounded-lg flex items-center mb-4 text-sm';
+                serverDiv.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2 flex-shrink-0 text-slate-500">
+                        <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                        <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                        <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                        <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                    </svg>
+                    <span><strong>HTTP Server:</strong> ${serverHeader}</span>
+                `;
+                resultsContainer.appendChild(serverDiv);
             };
 
             const renderCertificates = (certificates) => {

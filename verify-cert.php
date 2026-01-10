@@ -97,8 +97,8 @@ try {
 
     // Sanitize hostname input
     $hostname = isset($input['hostname']) ? trim($input['hostname']) : '';
-    // Remove protocol prefixes (http://, https://)
-    $hostname = preg_replace('/^https?:\/\//i', '', $hostname);
+    // Remove protocol prefixes and anything with *// pattern (e.g., https://, http://, *//, etc.)
+    $hostname = preg_replace('/^.*\/\//', '', $hostname);
     // Remove any path, query string, or fragment after the hostname
     $hostname = preg_replace('/[\/?#].*$/', '', $hostname);
     // Remove any trailing colon and port number if included in hostname
@@ -108,6 +108,11 @@ try {
 
     // Sanitize port input (trim whitespace before converting to int)
     $port = isset($input['port']) ? (int) trim($input['port']) : 0;
+
+    // Check for wildcard hostname entry (e.g., *.domain.tld)
+    if (strpos($hostname, '*.') === 0) {
+        throw new Exception('To validate a wildcard certificate, enter a hostname it\'s installed on.');
+    }
 
     if (empty($hostname) || filter_var($hostname, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false) {
         throw new Exception('A valid hostname is required.');
@@ -183,9 +188,18 @@ try {
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+        curl_setopt($ch, CURLOPT_HEADER, true); // Include headers in output
 
-        curl_exec($ch);
+        $response = curl_exec($ch);
         $certChainInfo = curl_getinfo($ch, CURLINFO_CERTINFO);
+        $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+        $headers = substr($response, 0, $headerSize);
+
+        // Extract Server header
+        $serverHeader = null;
+        if (preg_match('/^Server:\s*(.+)$/mi', $headers, $matches)) {
+            $serverHeader = trim($matches[1]);
+        }
 
         if (curl_errno($ch)) {
             if (empty($certChainInfo)) {
@@ -514,10 +528,17 @@ try {
     $chainStatus['revocationStatus'] = $revocationStatus;
 
     http_response_code(200);
-    echo json_encode([
+    $responseData = [
         'chainStatus' => $chainStatus,
         'certificates' => $certificates
-    ]);
+    ];
+
+    // Include server header if available
+    if (isset($serverHeader) && $serverHeader !== null) {
+        $responseData['serverHeader'] = $serverHeader;
+    }
+
+    echo json_encode($responseData);
 
 } catch (Exception $e) {
     send_error($e->getMessage(), is_int($e->getCode()) && $e->getCode() !== 0 ? $e->getCode() : 400);
