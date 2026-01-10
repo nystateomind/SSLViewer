@@ -262,6 +262,13 @@ try {
             ) {
                 $cdnDetected = 'AWS CloudFront';
             }
+            // AWS API Gateway detection
+            elseif (
+                preg_match('/^x-amz-apigw-id:/mi', $headers) ||
+                preg_match('/^x-amzn-requestid:/mi', $headers)
+            ) {
+                $cdnDetected = 'AWS API Gateway';
+            }
             // Azure CDN / Front Door detection
             elseif (
                 preg_match('/^X-Azure-Ref:/mi', $headers) ||
