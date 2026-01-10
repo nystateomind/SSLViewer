@@ -266,7 +266,77 @@ try {
             $cdnDetected = 'Sucuri';
         }
 
-        // If CDN detected but no/generic Server header, use CDN name
+        // --- Load Balancer Detection ---
+        // VMware Avi / NSX Advanced Load Balancer
+        elseif (
+            preg_match('/^Server:\s*AVI/mi', $headers) ||
+            preg_match('/^X-Avi-/mi', $headers)
+        ) {
+            $cdnDetected = 'VMware Avi';
+        }
+        // HAProxy
+        elseif (
+            preg_match('/^X-Haproxy-/mi', $headers) ||
+            preg_match('/^Via:.*haproxy/mi', $headers)
+        ) {
+            $cdnDetected = 'HAProxy';
+        }
+        // F5 BIG-IP
+        elseif (
+            preg_match('/^Server:\s*BigIP/mi', $headers) ||
+            preg_match('/^X-Cnection:/mi', $headers) ||
+            preg_match('/^Set-Cookie:.*BIGip/mi', $headers)
+        ) {
+            $cdnDetected = 'F5 BIG-IP';
+        }
+        // Citrix NetScaler / ADC
+        elseif (
+            preg_match('/^Via:.*NS-CACHE/mi', $headers) ||
+            preg_match('/^Cneonction:/mi', $headers) ||
+            preg_match('/^nnCoection:/mi', $headers) ||
+            preg_match('/^Set-Cookie:\s*NSC_/mi', $headers) ||
+            preg_match('/^X-NS-/mi', $headers)
+        ) {
+            $cdnDetected = 'Citrix NetScaler';
+        }
+        // AWS ALB/ELB (Application/Elastic Load Balancer)
+        elseif (
+            preg_match('/^X-Amzn-Trace-Id:/mi', $headers) ||
+            preg_match('/^Server:\s*awselb/mi', $headers)
+        ) {
+            $cdnDetected = 'AWS ALB/ELB';
+        }
+        // Envoy Proxy
+        elseif (
+            preg_match('/^Server:\s*envoy/mi', $headers) ||
+            preg_match('/^X-Envoy-/mi', $headers)
+        ) {
+            $cdnDetected = 'Envoy';
+        }
+        // Traefik
+        elseif (preg_match('/^Server:\s*Traefik/mi', $headers)) {
+            $cdnDetected = 'Traefik';
+        }
+        // Apache Traffic Server
+        elseif (
+            preg_match('/^Via:.*ApacheTrafficServer/mi', $headers) ||
+            preg_match('/^Server:\s*ATS/mi', $headers)
+        ) {
+            $cdnDetected = 'Apache Traffic Server';
+        }
+        // LiteSpeed
+        elseif (preg_match('/^Server:\s*LiteSpeed/mi', $headers)) {
+            $cdnDetected = 'LiteSpeed';
+        }
+        // Kong Gateway
+        elseif (
+            preg_match('/^Via:.*kong/mi', $headers) ||
+            preg_match('/^X-Kong-/mi', $headers)
+        ) {
+            $cdnDetected = 'Kong Gateway';
+        }
+
+        // If CDN/LB detected but no/generic Server header, use detected name
         if ($cdnDetected && (empty($serverHeader) || in_array(strtolower($serverHeader), ['akamaighost', 'apache', 'nginx', 'microsoft-iis']))) {
             $serverHeader = $cdnDetected . ($serverHeader ? ' (' . $serverHeader . ')' : '');
         }
