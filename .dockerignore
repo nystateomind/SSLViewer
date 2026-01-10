@@ -1,0 +1,20 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+README*
+
+# IDE
+.vscode
+.idea
+
+# Python virtual environments (not needed, we create inside container)
+venv
+__pycache__
+
+# Docker files (no need to copy into image)
+Dockerfile
+.dockerignore
+docker-compose*
