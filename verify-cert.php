@@ -194,6 +194,10 @@ try {
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
         curl_setopt($ch, CURLOPT_HEADER, true); // Include headers in output
+        // Add Akamai debug headers to reveal CDN info
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Pragma: akamai-x-cache-on, akamai-x-get-cache-key, akamai-x-get-true-cache-key'
+        ]);
 
         $response = curl_exec($ch);
         $certChainInfo = curl_getinfo($ch, CURLINFO_CERTINFO);
