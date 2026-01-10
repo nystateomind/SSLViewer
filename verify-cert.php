@@ -348,6 +348,15 @@ try {
             ) {
                 $cdnDetected = 'Kong Gateway';
             }
+            // Microsoft IIS detection (when Server header is hidden)
+            elseif (
+                preg_match('/^X-Powered-By:\s*ASP\.NET/mi', $headers) ||
+                preg_match('/^X-AspNet-Version:/mi', $headers) ||
+                preg_match('/^X-AspNetMvc-Version:/mi', $headers) ||
+                preg_match('/^Set-Cookie:\s*(ASP\.NET_SessionId|ASPSESSIONID)/mi', $headers)
+            ) {
+                $cdnDetected = 'Microsoft IIS';
+            }
         } // End of generic detection (if $cdnDetected === null)
 
         // If CDN/LB detected but no/generic Server header, use detected name

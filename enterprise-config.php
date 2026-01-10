@@ -31,7 +31,7 @@ function enterprise_detect_infrastructure($hostname, $ipAddress, $headers)
 
     foreach ($aviIpRanges as $range) {
         if (ip_in_range($ipAddress, $range)) {
-            return 'VMware Avi';
+            return 'VMware Avi Load Balancer';
         }
     }
 
