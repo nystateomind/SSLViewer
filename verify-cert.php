@@ -7,6 +7,11 @@
  * different protocols based on the port number.
  */
 
+// Include enterprise-specific detection (optional - create this file for custom IP-based detection)
+if (file_exists(__DIR__ . '/enterprise-config.php')) {
+    require_once __DIR__ . '/enterprise-config.php';
+}
+
 // Set the content type to JSON for all responses
 header("Content-Type: application/json");
 
@@ -197,144 +202,153 @@ try {
 
         // Extract Server header and detect CDN/WAF
         $serverHeader = null;
-        if (preg_match('/^Server:\\s*(.+)$/mi', $headers, $matches)) {
+        if (preg_match('/^Server:\s*(.+)$/mi', $headers, $matches)) {
             $serverHeader = trim($matches[1]);
         }
 
         // Detect CDN/WAF from headers when Server header is missing or generic
         $cdnDetected = null;
 
-        // Akamai detection
-        if (
-            preg_match('/^X-Akamai-Transformed:/mi', $headers) ||
-            preg_match('/^X-Akamai-Session-Info:/mi', $headers) ||
-            preg_match('/^Akamai-Origin-Hop:/mi', $headers) ||
-            preg_match('/^X-Akamai-Request-ID:/mi', $headers) ||
-            preg_match('/^Akamai-GRN:/mi', $headers) ||
-            preg_match('/^X-Akamai-/mi', $headers)
-        ) {
-            $cdnDetected = 'Akamai';
-        }
-        // Cloudflare detection
-        elseif (
-            preg_match('/^CF-RAY:/mi', $headers) ||
-            preg_match('/^CF-Cache-Status:/mi', $headers) ||
-            (preg_match('/^Server:\s*cloudflare/mi', $headers))
-        ) {
-            $cdnDetected = 'Cloudflare';
-        }
-        // Fastly detection
-        elseif (
-            preg_match('/^X-Served-By:.*cache/mi', $headers) ||
-            preg_match('/^Fastly-/mi', $headers) ||
-            preg_match('/^X-Fastly-/mi', $headers)
-        ) {
-            $cdnDetected = 'Fastly';
-        }
-        // AWS CloudFront detection
-        elseif (
-            preg_match('/^X-Amz-Cf-Id:/mi', $headers) ||
-            preg_match('/^X-Amz-Cf-Pop:/mi', $headers) ||
-            preg_match('/^Via:.*CloudFront/mi', $headers)
-        ) {
-            $cdnDetected = 'AWS CloudFront';
-        }
-        // Azure CDN / Front Door detection
-        elseif (
-            preg_match('/^X-Azure-Ref:/mi', $headers) ||
-            preg_match('/^X-MSEdge-Ref:/mi', $headers)
-        ) {
-            $cdnDetected = 'Azure CDN';
-        }
-        // Google Cloud CDN detection
-        elseif (preg_match('/^Via:.*google/mi', $headers)) {
-            $cdnDetected = 'Google Cloud CDN';
-        }
-        // Varnish detection
-        elseif (preg_match('/^X-Varnish:/mi', $headers)) {
-            $cdnDetected = 'Varnish';
-        }
-        // Incapsula/Imperva detection
-        elseif (
-            preg_match('/^X-Iinfo:/mi', $headers) ||
-            preg_match('/^X-CDN:/mi', $headers)
-        ) {
-            $cdnDetected = 'Imperva/Incapsula';
-        }
-        // Sucuri detection
-        elseif (preg_match('/^X-Sucuri-ID:/mi', $headers)) {
-            $cdnDetected = 'Sucuri';
+        // Enterprise-specific detection (runs first, takes priority)
+        if (function_exists('enterprise_detect_infrastructure')) {
+            $ipAddress = gethostbyname($hostname);
+            $cdnDetected = enterprise_detect_infrastructure($hostname, $ipAddress, $headers);
         }
 
-        // --- Load Balancer Detection ---
-        // VMware Avi / NSX Advanced Load Balancer
-        elseif (
-            preg_match('/^Server:\s*AVI/mi', $headers) ||
-            preg_match('/^X-Avi-/mi', $headers)
-        ) {
-            $cdnDetected = 'VMware Avi';
-        }
-        // HAProxy
-        elseif (
-            preg_match('/^X-Haproxy-/mi', $headers) ||
-            preg_match('/^Via:.*haproxy/mi', $headers)
-        ) {
-            $cdnDetected = 'HAProxy';
-        }
-        // F5 BIG-IP
-        elseif (
-            preg_match('/^Server:\s*BigIP/mi', $headers) ||
-            preg_match('/^X-Cnection:/mi', $headers) ||
-            preg_match('/^Set-Cookie:.*BIGip/mi', $headers)
-        ) {
-            $cdnDetected = 'F5 BIG-IP';
-        }
-        // Citrix NetScaler / ADC
-        elseif (
-            preg_match('/^Via:.*NS-CACHE/mi', $headers) ||
-            preg_match('/^Cneonction:/mi', $headers) ||
-            preg_match('/^nnCoection:/mi', $headers) ||
-            preg_match('/^Set-Cookie:\s*NSC_/mi', $headers) ||
-            preg_match('/^X-NS-/mi', $headers)
-        ) {
-            $cdnDetected = 'Citrix NetScaler';
-        }
-        // AWS ALB/ELB (Application/Elastic Load Balancer)
-        elseif (
-            preg_match('/^X-Amzn-Trace-Id:/mi', $headers) ||
-            preg_match('/^Server:\s*awselb/mi', $headers)
-        ) {
-            $cdnDetected = 'AWS ALB/ELB';
-        }
-        // Envoy Proxy
-        elseif (
-            preg_match('/^Server:\s*envoy/mi', $headers) ||
-            preg_match('/^X-Envoy-/mi', $headers)
-        ) {
-            $cdnDetected = 'Envoy';
-        }
-        // Traefik
-        elseif (preg_match('/^Server:\s*Traefik/mi', $headers)) {
-            $cdnDetected = 'Traefik';
-        }
-        // Apache Traffic Server
-        elseif (
-            preg_match('/^Via:.*ApacheTrafficServer/mi', $headers) ||
-            preg_match('/^Server:\s*ATS/mi', $headers)
-        ) {
-            $cdnDetected = 'Apache Traffic Server';
-        }
-        // LiteSpeed
-        elseif (preg_match('/^Server:\s*LiteSpeed/mi', $headers)) {
-            $cdnDetected = 'LiteSpeed';
-        }
-        // Kong Gateway
-        elseif (
-            preg_match('/^Via:.*kong/mi', $headers) ||
-            preg_match('/^X-Kong-/mi', $headers)
-        ) {
-            $cdnDetected = 'Kong Gateway';
-        }
+        // Generic detection (only if enterprise detection didn't match)
+        if ($cdnDetected === null) {
+            // Akamai detection
+            if (
+                preg_match('/^X-Akamai-Transformed:/mi', $headers) ||
+                preg_match('/^X-Akamai-Session-Info:/mi', $headers) ||
+                preg_match('/^Akamai-Origin-Hop:/mi', $headers) ||
+                preg_match('/^X-Akamai-Request-ID:/mi', $headers) ||
+                preg_match('/^Akamai-GRN:/mi', $headers) ||
+                preg_match('/^X-Akamai-/mi', $headers)
+            ) {
+                $cdnDetected = 'Akamai';
+            }
+            // Cloudflare detection
+            elseif (
+                preg_match('/^CF-RAY:/mi', $headers) ||
+                preg_match('/^CF-Cache-Status:/mi', $headers) ||
+                (preg_match('/^Server:\s*cloudflare/mi', $headers))
+            ) {
+                $cdnDetected = 'Cloudflare';
+            }
+            // Fastly detection
+            elseif (
+                preg_match('/^X-Served-By:.*cache/mi', $headers) ||
+                preg_match('/^Fastly-/mi', $headers) ||
+                preg_match('/^X-Fastly-/mi', $headers)
+            ) {
+                $cdnDetected = 'Fastly';
+            }
+            // AWS CloudFront detection
+            elseif (
+                preg_match('/^X-Amz-Cf-Id:/mi', $headers) ||
+                preg_match('/^X-Amz-Cf-Pop:/mi', $headers) ||
+                preg_match('/^Via:.*CloudFront/mi', $headers)
+            ) {
+                $cdnDetected = 'AWS CloudFront';
+            }
+            // Azure CDN / Front Door detection
+            elseif (
+                preg_match('/^X-Azure-Ref:/mi', $headers) ||
+                preg_match('/^X-MSEdge-Ref:/mi', $headers)
+            ) {
+                $cdnDetected = 'Azure CDN';
+            }
+            // Google Cloud CDN detection
+            elseif (preg_match('/^Via:.*google/mi', $headers)) {
+                $cdnDetected = 'Google Cloud CDN';
+            }
+            // Varnish detection
+            elseif (preg_match('/^X-Varnish:/mi', $headers)) {
+                $cdnDetected = 'Varnish';
+            }
+            // Incapsula/Imperva detection
+            elseif (
+                preg_match('/^X-Iinfo:/mi', $headers) ||
+                preg_match('/^X-CDN:/mi', $headers)
+            ) {
+                $cdnDetected = 'Imperva/Incapsula';
+            }
+            // Sucuri detection
+            elseif (preg_match('/^X-Sucuri-ID:/mi', $headers)) {
+                $cdnDetected = 'Sucuri';
+            }
+
+            // --- Load Balancer Detection ---
+            // VMware Avi / NSX Advanced Load Balancer
+            elseif (
+                preg_match('/^Server:\s*AVI/mi', $headers) ||
+                preg_match('/^X-Avi-/mi', $headers)
+            ) {
+                $cdnDetected = 'VMware Avi';
+            }
+            // HAProxy
+            elseif (
+                preg_match('/^X-Haproxy-/mi', $headers) ||
+                preg_match('/^Via:.*haproxy/mi', $headers)
+            ) {
+                $cdnDetected = 'HAProxy';
+            }
+            // F5 BIG-IP
+            elseif (
+                preg_match('/^Server:\s*BigIP/mi', $headers) ||
+                preg_match('/^X-Cnection:/mi', $headers) ||
+                preg_match('/^Set-Cookie:.*BIGip/mi', $headers)
+            ) {
+                $cdnDetected = 'F5 BIG-IP';
+            }
+            // Citrix NetScaler / ADC
+            elseif (
+                preg_match('/^Via:.*NS-CACHE/mi', $headers) ||
+                preg_match('/^Cneonction:/mi', $headers) ||
+                preg_match('/^nnCoection:/mi', $headers) ||
+                preg_match('/^Set-Cookie:\s*NSC_/mi', $headers) ||
+                preg_match('/^X-NS-/mi', $headers)
+            ) {
+                $cdnDetected = 'Citrix NetScaler';
+            }
+            // AWS ALB/ELB (Application/Elastic Load Balancer)
+            elseif (
+                preg_match('/^X-Amzn-Trace-Id:/mi', $headers) ||
+                preg_match('/^Server:\s*awselb/mi', $headers)
+            ) {
+                $cdnDetected = 'AWS ALB/ELB';
+            }
+            // Envoy Proxy
+            elseif (
+                preg_match('/^Server:\s*envoy/mi', $headers) ||
+                preg_match('/^X-Envoy-/mi', $headers)
+            ) {
+                $cdnDetected = 'Envoy';
+            }
+            // Traefik
+            elseif (preg_match('/^Server:\s*Traefik/mi', $headers)) {
+                $cdnDetected = 'Traefik';
+            }
+            // Apache Traffic Server
+            elseif (
+                preg_match('/^Via:.*ApacheTrafficServer/mi', $headers) ||
+                preg_match('/^Server:\s*ATS/mi', $headers)
+            ) {
+                $cdnDetected = 'Apache Traffic Server';
+            }
+            // LiteSpeed
+            elseif (preg_match('/^Server:\s*LiteSpeed/mi', $headers)) {
+                $cdnDetected = 'LiteSpeed';
+            }
+            // Kong Gateway
+            elseif (
+                preg_match('/^Via:.*kong/mi', $headers) ||
+                preg_match('/^X-Kong-/mi', $headers)
+            ) {
+                $cdnDetected = 'Kong Gateway';
+            }
+        } // End of generic detection (if $cdnDetected === null)
 
         // If CDN/LB detected but no/generic Server header, use detected name
         if ($cdnDetected && (empty($serverHeader) || in_array(strtolower($serverHeader), ['akamaighost', 'apache', 'nginx', 'microsoft-iis']))) {
