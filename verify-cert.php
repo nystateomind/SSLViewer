@@ -195,10 +195,80 @@ try {
         $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         $headers = substr($response, 0, $headerSize);
 
-        // Extract Server header
+        // Extract Server header and detect CDN/WAF
         $serverHeader = null;
-        if (preg_match('/^Server:\s*(.+)$/mi', $headers, $matches)) {
+        if (preg_match('/^Server:\\s*(.+)$/mi', $headers, $matches)) {
             $serverHeader = trim($matches[1]);
+        }
+
+        // Detect CDN/WAF from headers when Server header is missing or generic
+        $cdnDetected = null;
+
+        // Akamai detection
+        if (
+            preg_match('/^X-Akamai-Transformed:/mi', $headers) ||
+            preg_match('/^X-Akamai-Session-Info:/mi', $headers) ||
+            preg_match('/^Akamai-Origin-Hop:/mi', $headers) ||
+            preg_match('/^X-Akamai-Request-ID:/mi', $headers) ||
+            preg_match('/^Akamai-GRN:/mi', $headers) ||
+            preg_match('/^X-Akamai-/mi', $headers)
+        ) {
+            $cdnDetected = 'Akamai';
+        }
+        // Cloudflare detection
+        elseif (
+            preg_match('/^CF-RAY:/mi', $headers) ||
+            preg_match('/^CF-Cache-Status:/mi', $headers) ||
+            (preg_match('/^Server:\s*cloudflare/mi', $headers))
+        ) {
+            $cdnDetected = 'Cloudflare';
+        }
+        // Fastly detection
+        elseif (
+            preg_match('/^X-Served-By:.*cache/mi', $headers) ||
+            preg_match('/^Fastly-/mi', $headers) ||
+            preg_match('/^X-Fastly-/mi', $headers)
+        ) {
+            $cdnDetected = 'Fastly';
+        }
+        // AWS CloudFront detection
+        elseif (
+            preg_match('/^X-Amz-Cf-Id:/mi', $headers) ||
+            preg_match('/^X-Amz-Cf-Pop:/mi', $headers) ||
+            preg_match('/^Via:.*CloudFront/mi', $headers)
+        ) {
+            $cdnDetected = 'AWS CloudFront';
+        }
+        // Azure CDN / Front Door detection
+        elseif (
+            preg_match('/^X-Azure-Ref:/mi', $headers) ||
+            preg_match('/^X-MSEdge-Ref:/mi', $headers)
+        ) {
+            $cdnDetected = 'Azure CDN';
+        }
+        // Google Cloud CDN detection
+        elseif (preg_match('/^Via:.*google/mi', $headers)) {
+            $cdnDetected = 'Google Cloud CDN';
+        }
+        // Varnish detection
+        elseif (preg_match('/^X-Varnish:/mi', $headers)) {
+            $cdnDetected = 'Varnish';
+        }
+        // Incapsula/Imperva detection
+        elseif (
+            preg_match('/^X-Iinfo:/mi', $headers) ||
+            preg_match('/^X-CDN:/mi', $headers)
+        ) {
+            $cdnDetected = 'Imperva/Incapsula';
+        }
+        // Sucuri detection
+        elseif (preg_match('/^X-Sucuri-ID:/mi', $headers)) {
+            $cdnDetected = 'Sucuri';
+        }
+
+        // If CDN detected but no/generic Server header, use CDN name
+        if ($cdnDetected && (empty($serverHeader) || in_array(strtolower($serverHeader), ['akamaighost', 'apache', 'nginx', 'microsoft-iis']))) {
+            $serverHeader = $cdnDetected . ($serverHeader ? ' (' . $serverHeader . ')' : '');
         }
 
         if (curl_errno($ch)) {
