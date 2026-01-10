@@ -161,23 +161,59 @@ try {
 
         fclose($pipes[0]);
 
-        // Set timeout for streams to prevent hanging (10 seconds)
-        stream_set_timeout($pipes[1], 10);
-        stream_set_timeout($pipes[2], 10);
+        // Set streams to non-blocking for proper timeout handling
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
 
-        $output = stream_get_contents($pipes[1]);
-        $streamInfo = stream_get_meta_data($pipes[1]);
-        fclose($pipes[1]);
+        $output = '';
+        $error_output = '';
+        $timeout = 10; // 10 second timeout
+        $startTime = time();
 
-        $error_output = stream_get_contents($pipes[2]);
-        fclose($pipes[2]);
+        // Poll streams with timeout
+        while (true) {
+            $read = [$pipes[1], $pipes[2]];
+            $write = null;
+            $except = null;
 
-        proc_close($process);
+            // Check if process is still running
+            $status = proc_get_status($process);
 
-        // Check if timeout occurred
-        if ($streamInfo['timed_out']) {
-            throw new Exception("Connection timed out while performing STARTTLS.", 500);
+            // Use stream_select with 1 second timeout for polling
+            $ready = @stream_select($read, $write, $except, 1);
+
+            if ($ready === false) {
+                // stream_select error
+                break;
+            }
+
+            foreach ($read as $stream) {
+                $data = fread($stream, 8192);
+                if ($stream === $pipes[1]) {
+                    $output .= $data;
+                } else {
+                    $error_output .= $data;
+                }
+            }
+
+            // Check timeout
+            if ((time() - $startTime) >= $timeout) {
+                proc_terminate($process);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                proc_close($process);
+                throw new Exception("Connection timed out while performing STARTTLS (10 second limit).", 500);
+            }
+
+            // If process ended and no more data, exit
+            if (!$status['running'] && feof($pipes[1]) && feof($pipes[2])) {
+                break;
+            }
         }
+
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($process);
 
         if (empty($output) && !empty($error_output)) {
             throw new Exception("OpenSSL command failed.", 500);
