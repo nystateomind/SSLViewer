@@ -190,7 +190,7 @@ try {
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 15);
         curl_setopt($ch, CURLOPT_CERTINFO, true);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false); // Don't follow redirects - capture initial response headers
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
         curl_setopt($ch, CURLOPT_HEADER, true); // Include headers in output
@@ -221,10 +221,14 @@ try {
             if (
                 preg_match('/^X-Akamai-Transformed:/mi', $headers) ||
                 preg_match('/^X-Akamai-Session-Info:/mi', $headers) ||
+                preg_match('/^X-Akamai-SSL-Client-Sid:/mi', $headers) ||
                 preg_match('/^Akamai-Origin-Hop:/mi', $headers) ||
                 preg_match('/^X-Akamai-Request-ID:/mi', $headers) ||
                 preg_match('/^Akamai-GRN:/mi', $headers) ||
-                preg_match('/^X-Akamai-/mi', $headers)
+                preg_match('/^X-Akamai-/mi', $headers) ||
+                preg_match('/^X-Cache:.*akamaitechnologies\.com/mi', $headers) ||
+                preg_match('/^X-Cache:.*AkamaiGHost/mi', $headers) ||
+                preg_match('/^X-True-Cache-Key:/mi', $headers)
             ) {
                 $cdnDetected = 'Akamai';
             }
