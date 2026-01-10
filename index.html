@@ -362,13 +362,13 @@
                 event.preventDefault();
             }
 
-            // Update URL hash - only keep query params for cert_chain tab
+            // Update URL hash - don't add hash for default tab (cert_chain)
             let newUrl;
             if (tabName === 'cert_chain') {
-                // Preserve query params for cert_chain
-                newUrl = window.location.search + '#' + tabName;
+                // Default tab - just use query params, no hash needed
+                newUrl = window.location.search || window.location.pathname;
             } else {
-                // Remove query params for other tabs
+                // Non-default tabs - add hash, remove query params
                 newUrl = window.location.pathname + '#' + tabName;
             }
             history.replaceState(null, '', newUrl);
@@ -469,9 +469,8 @@
                     const data = await response.json();
                     if (!response.ok) { throw new Error(data.error || `HTTP error! status: ${response.status}`); }
 
-                    // Update URL with query parameters, preserving hash
-                    const currentHash = window.location.hash || '#cert_chain';
-                    const newUrl = `${window.location.pathname}?hostname=${encodeURIComponent(hostname)}&port=${encodeURIComponent(port)}${currentHash}`;
+                    // Update URL with query parameters (no hash for default cert_chain tab)
+                    const newUrl = `${window.location.pathname}?hostname=${encodeURIComponent(hostname)}&port=${encodeURIComponent(port)}`;
                     history.replaceState(null, '', newUrl);
 
                     // Handle new response format with chainStatus and certificates
