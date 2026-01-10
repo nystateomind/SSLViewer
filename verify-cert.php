@@ -12,6 +12,9 @@ if (file_exists(__DIR__ . '/enterprise-config.php')) {
     require_once __DIR__ . '/enterprise-config.php';
 }
 
+// Set PHP execution time limit as failsafe (30 seconds max)
+set_time_limit(30);
+
 // Set the content type to JSON for all responses
 header("Content-Type: application/json");
 
@@ -216,7 +219,7 @@ try {
         proc_close($process);
 
         if (empty($output) && !empty($error_output)) {
-            throw new Exception("OpenSSL command failed.", 500);
+            throw new Exception("OpenSSL command failed. Verify hostname and port are correct.", 500);
         }
 
         if (strpos($output, '-----BEGIN CERTIFICATE-----') === false) {
