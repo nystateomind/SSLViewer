@@ -216,7 +216,13 @@ try {
         // Detect CDN/WAF from headers when Server header is missing or generic
         $cdnDetected = null;
 
-        // Generic detection using combined regex patterns for performance
+        // Enterprise-specific detection (runs FIRST, uses DNS lookup for IP-based detection)
+        if (function_exists('enterprise_detect_infrastructure')) {
+            $ipAddress = gethostbyname($hostname);
+            $cdnDetected = enterprise_detect_infrastructure($hostname, $ipAddress, $headers);
+        }
+
+        // Generic detection using combined regex patterns (only if enterprise didn't match)
         if ($cdnDetected === null) {
             // CDN/WAF detection patterns (combined for performance)
             $cdnPatterns = [
@@ -251,12 +257,6 @@ try {
                     break;
                 }
             }
-        }
-
-        // Enterprise-specific detection (runs after generic, uses DNS lookup)
-        if ($cdnDetected === null && function_exists('enterprise_detect_infrastructure')) {
-            $ipAddress = gethostbyname($hostname);
-            $cdnDetected = enterprise_detect_infrastructure($hostname, $ipAddress, $headers);
         }
 
         // If CDN/LB detected but no/generic Server header, use detected name
