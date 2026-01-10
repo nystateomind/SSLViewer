@@ -212,10 +212,12 @@
                             </button>
                         </div>
                     </div>
-                    <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-2">🔓 Decrypted Key Output:</h3>
-                    <pre id="removerOutput"
-                        class="p-4 bg-gray-50 border border-gray-200 rounded-md result-box font-mono text-sm"></pre>
-                    <div id="removerDownloadContainer" class="mt-4"></div>
+                    <div id="decryptedOutputSection" class="hidden">
+                        <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-2">🔓 Decrypted Key Output:</h3>
+                        <pre id="removerOutput"
+                            class="p-4 bg-gray-50 border border-gray-200 rounded-md result-box font-mono text-sm"></pre>
+                        <div id="removerDownloadContainer" class="mt-4"></div>
+                    </div>
                 </div>
             </div>
         </main>
@@ -1200,6 +1202,9 @@
                     if (!unencryptedPem) throw new Error('Could not parse or decrypt the private key.');
 
                     output.textContent = unencryptedPem;
+
+                    // Show the decrypted output section
+                    document.getElementById('decryptedOutputSection').classList.remove('hidden');
 
                     const blob = new Blob([unencryptedPem], { type: 'application/x-pem-file' });
                     const link = document.createElement('a');
