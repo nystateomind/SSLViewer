@@ -81,6 +81,12 @@ try {
 
     // Sanitize hostname input
     $hostname = isset($input['hostname']) ? trim($input['hostname']) : '';
+
+    // Check for wildcard hostname entry (e.g., *.domain.tld) before sanitizing
+    if (preg_match('/^\s*\*\./', $hostname)) {
+        throw new Exception('To validate a wildcard certificate, enter a hostname it\'s installed on.');
+    }
+
     // Remove leading non-hostname characters (bullets, spaces, dashes, etc.)
     $hostname = preg_replace('/^[^a-zA-Z0-9]+/', '', $hostname);
     $hostname = preg_replace('/^.*\/\//', '', $hostname);
@@ -93,11 +99,6 @@ try {
 
     // Check if PostgreSQL mode
     $isPostgres = isset($input['isPostgres']) ? (bool) $input['isPostgres'] : false;
-
-    // Check for wildcard hostname entry (e.g., *.domain.tld)
-    if (strpos($hostname, '*.') === 0) {
-        throw new Exception('To validate a wildcard certificate, enter a hostname it\'s installed on.');
-    }
 
     if (empty($hostname) || filter_var($hostname, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false) {
         throw new Exception('A valid hostname is required.');
