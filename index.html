@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="">
 
 <head>
     <meta charset="UTF-8" />
@@ -7,24 +7,55 @@
     <title>SSL/TLS Certificate Tools</title>
     <link rel="icon" type="image/x-icon" href="favicon.ico">
     <script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Source+Code+Pro&display=swap"
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
+
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                    },
+                    colors: {
+                        slate: {
+                            850: '#151e2e', // Custom deeper slate for cards
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <style>
         body {
-            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f8fafc;
+            font-family: 'Plus Jakarta Sans', sans-serif;
         }
 
         textarea,
-        pre {
-            font-family: 'Source Code Pro', monospace;
+        pre,
+        code {
+            font-family: 'JetBrains Mono', monospace;
         }
 
         .form-input:focus {
             outline: none;
-            border-color: #4f46e5;
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.3);
+            border-color: #6366f1;
+            /* Indigo 500 */
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3);
+        }
+
+        /* Dark mode focus overrides */
+        .dark .form-input:focus {
+            border-color: #818cf8;
+            /* Indigo 400 */
+            box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.2);
         }
 
         .result-box {
@@ -41,48 +72,93 @@
             display: block;
         }
 
-        nav a.active {
-            color: #4f46e5;
-            border-color: #4f46e5;
+        /* Modern Tab Styles */
+        nav a {
+            position: relative;
+            transition: all 0.2s ease;
         }
 
-        /* Hide arrows from number input */
+        nav a::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: transparent;
+            transition: background-color 0.2s ease;
+        }
+
+        nav a.active {
+            color: #4f46e5;
+        }
+
+        .dark nav a.active {
+            color: #818cf8;
+        }
+
+        nav a.active::after {
+            background-color: #4f46e5;
+        }
+
+        .dark nav a.active::after {
+            background-color: #818cf8;
+        }
+
+        /* Number input cleanup */
         input::-webkit-outer-spin-button,
         input::-webkit-inner-spin-button {
             -webkit-appearance: none;
-            appearance: none;
             margin: 0;
         }
 
         input[type=number] {
             -moz-appearance: textfield;
-            appearance: textfield;
         }
     </style>
 </head>
 
-<body class="antialiased text-gray-800">
+<body
+    class="antialiased text-slate-800 bg-slate-50 dark:bg-slate-900 dark:text-slate-200 transition-colors duration-200">
 
-    <div class="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
+    <div class="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8">
 
-        <header class="text-center mb-8">
-            <h1 class="text-3xl font-bold text-gray-900"><a href="./">SSL/TLS Certificate Tools</a></h1>
-            <p class="mt-2 text-gray-600">A collection of tools for handling SSL certificates</p>
+        <header class="flex justify-between items-start mb-10">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight"><a href="./">SSL/TLS
+                        Tools</a></h1>
+                <p class="mt-2 text-slate-500 dark:text-slate-400">Diagnostic utilities for certificates & encryption
+                </p>
+            </div>
+
+            <button id="theme-toggle"
+                class="p-2 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                aria-label="Toggle Dark Mode">
+                <svg id="theme-toggle-light-icon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 20 20"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <path
+                        d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 100 2h1z"
+                        fill-rule="evenodd" clip-rule="evenodd"></path>
+                </svg>
+                <svg id="theme-toggle-dark-icon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 20 20"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+                </svg>
+            </button>
         </header>
 
-        <!-- Tab Navigation -->
-        <div class="mb-6 border-b border-gray-200">
-            <nav class="flex flex-wrap -mb-px space-x-6" aria-label="Tabs">
+        <div class="mb-8 border-b border-slate-200 dark:border-slate-700">
+            <nav class="flex flex-wrap -mb-px space-x-8" aria-label="Tabs">
                 <a href="#cert_chain" onclick="switchTab('cert_chain', event)"
-                    class="tab-button active whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2">
+                    class="tab-button active whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 border-transparent">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                     </svg>
-                    Certificate Chain
+                    Chain Viewer
                 </a>
                 <a href="#decoder" onclick="switchTab('decoder', event)"
-                    class="tab-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 flex items-center gap-2">
+                    class="tab-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -93,38 +169,37 @@
                     PEM Decoder
                 </a>
                 <a href="#decryption" onclick="switchTab('decryption', event)"
-                    class="tab-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 flex items-center gap-2">
+                    class="tab-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                         <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                     </svg>
-                    Key Decryption
+                    Key Decrypter
                 </a>
             </nav>
         </div>
 
         <main>
-            <!-- Certificate Chain Tab -->
             <div id="tab-cert_chain" class="tab-content active">
-                <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-                    <h2 class="text-2xl font-semibold text-gray-800 mb-1">SSL Certificate Chain Viewer</h2>
-                    <p class="text-gray-600 mb-4">Enter a hostname/IP address and port. This tool connects to the
-                        specified host to validate the server's certificate chain. Valid installations have at least a
-                        leaf certificate and intermediate certificate.</p>
+                <div
+                    class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
+                    <h2 class="text-xl font-semibold text-slate-900 dark:text-white mb-2">Remote Chain Verification</h2>
+                    <p class="text-slate-500 dark:text-slate-400 mb-6 text-sm">Validate the installation of a server's
+                        certificate chain.</p>
 
-                    <form id="verify-form" class="flex flex-col sm:flex-row items-center gap-4">
-                        <input id="hostname-input" type="text" value="" placeholder="Hostname (ex. www.google.com)"
-                            class="w-full sm:flex-1 p-2 border border-gray-300 rounded-md shadow-sm form-input transition"
+                    <form id="verify-form" class="flex flex-col sm:flex-row items-center gap-3">
+                        <input id="hostname-input" type="text" value="" placeholder="Hostname (e.g., example.com)"
+                            class="w-full sm:flex-1 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm form-input transition text-sm text-slate-900 dark:text-white placeholder:text-slate-400"
                             required>
                         <input id="port-input" type="number" value="443" placeholder="Port"
-                            class="w-full sm:w-24 p-2 border border-gray-300 rounded-md shadow-sm form-input transition"
+                            class="w-full sm:w-24 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm form-input transition text-sm text-slate-900 dark:text-white"
                             required ondblclick="this.select()">
                         <button id="submit-button" type="submit"
-                            class="w-full sm:w-auto flex-grow sm:flex-grow-0 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-bold py-2.5 px-6 rounded-lg flex items-center justify-center transition-all duration-300">
+                            class="w-full sm:w-auto flex-grow sm:flex-grow-0 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 disabled:bg-slate-400 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-6 rounded-lg flex items-center justify-center transition-all duration-200 shadow-sm text-sm">
                             <span id="button-text">Connect</span>
                             <span id="button-loader" class="hidden flex items-center">
-                                <svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
+                                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
                                     xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
                                         stroke-width="4"></circle>
@@ -136,86 +211,145 @@
                             </span>
                         </button>
                     </form>
-                    <div class="mt-3">
-                        <label class="inline-flex items-center cursor-pointer">
+                    <div class="mt-4">
+                        <label class="inline-flex items-center cursor-pointer group">
                             <input type="checkbox" id="enhanced-scan-checkbox"
-                                class="form-checkbox h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500">
-                            <span class="ml-2 text-sm text-gray-600">Enhanced vulnerability scan</span>
+                                class="form-checkbox h-4 w-4 text-indigo-600 rounded border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 focus:ring-indigo-500 transition-colors">
+                            <span
+                                class="ml-2 text-sm text-slate-600 dark:text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-300 transition-colors">Run
+                                enhanced vulnerability scan (SSLyze)</span>
                         </label>
                     </div>
-                    <div id="results-container" class="mt-6"></div>
-                    <div id="sslyze-results-container" class="mt-6"></div>
+                    <div id="results-container" class="mt-8 space-y-4"></div>
+                    <div id="sslyze-results-container" class="mt-8"></div>
                 </div>
             </div>
 
-            <!-- PEM Decoder Tab -->
             <div id="tab-decoder" class="tab-content">
-                <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-                    <h2 class="text-2xl font-semibold text-gray-800 mb-1">PEM Decoder</h2>
-                    <p class="text-gray-600 mb-4">Paste your PEM-formatted certificate or CSR below to see its details.
-                    </p>
-                    <textarea id="certInput"
-                        class="w-full h-64 p-3 border border-gray-300 rounded-md shadow-sm form-input transition text-sm placeholder:text-xs placeholder:text-gray-400"
-                        placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----&#10;&#10;or&#10;&#10;-----BEGIN CERTIFICATE REQUEST-----&#10;...&#10;-----END CERTIFICATE REQUEST-----"></textarea>
-                    <div class="mt-4 text-right">
-                        <button onclick="decodeCert()"
-                            class="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition">
-                            Decode
+                <div
+                    class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
+                    <div class="flex justify-between items-center mb-2">
+                        <h2 class="text-xl font-semibold text-slate-900 dark:text-white">PEM Decoder</h2>
+                        <span
+                            class="inline-flex items-center rounded-md bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 ring-1 ring-inset ring-emerald-600/20">
+                            <svg class="mr-1.5 h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
+                            </svg>
+                            Processed Locally
+                        </span>
+                    </div>
+                    <p class="text-slate-500 dark:text-slate-400 mb-4 text-sm">Paste a PEM-formatted certificate (CRT)
+                        or request (CSR).</p>
+
+                    <div class="relative group">
+                        <textarea id="certInput"
+                            class="w-full h-64 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm form-input transition text-xs leading-relaxed text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
+                            placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"></textarea>
+
+                        <button
+                            onclick="document.getElementById('certInput').value = ''; document.getElementById('certInput').focus();"
+                            class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 bg-transparent rounded-md transition-colors"
+                            title="Clear">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
                         </button>
                     </div>
-                    <div id="decoderOutput" class="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-md result-box">
+
+                    <div class="mt-4 flex justify-end">
+                        <button onclick="decodeCert()"
+                            class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-semibold rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:ring-offset-slate-900 transition text-sm">
+                            Decode Certificate
+                        </button>
                     </div>
+                    <div id="decoderOutput" class="mt-6"></div>
                 </div>
             </div>
 
-            <!-- Private Key Decryption Tab -->
             <div id="tab-decryption" class="tab-content">
-                <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-                    <h2 class="text-2xl font-semibold text-gray-800 mb-1">Private Key Decryption</h2>
-                    <div
-                        class="bg-orange-100 border border-orange-300 text-orange-800 p-3 rounded-lg flex items-start text-xs mb-4">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                            class="mr-2 flex-shrink-0 mt-0.5">
-                            <path
-                                d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z">
-                            </path>
-                            <line x1="12" y1="9" x2="12" y2="13"></line>
-                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                        </svg>
-                        <div>
-                            <p class="mb-2">For production environments, use one of these commands locally to
-                                avoid transmitting unencrypted keys:</p>
-                            <code
-                                class="block bg-orange-200 p-1.5 rounded text-orange-900 mb-1">openssl rsa -in encrypted.key -out unencrypted.key</code>
-                            <code
-                                class="block bg-orange-200 p-1.5 rounded text-orange-900">ssh-keygen -p -m PEM -N "" -f hostname.key</code>
+                <div
+                    class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Private Key Decryption</h2>
+                        <span
+                            class="inline-flex items-center rounded-md bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 ring-1 ring-inset ring-emerald-600/20">
+                            <svg class="mr-1.5 h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
+                            </svg>
+                            Processed Locally
+                        </span>
+                    </div>
+
+                    <div class="mb-6 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-600">
+                        <div
+                            class="bg-slate-100 dark:bg-slate-900 px-4 py-2 border-b border-slate-300 dark:border-slate-600 flex items-center">
+                            <div class="flex space-x-1.5 mr-4">
+                                <div class="w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-600"></div>
+                                <div class="w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-600"></div>
+                                <div class="w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-600"></div>
+                            </div>
+                            <span class="text-xs font-mono text-slate-500">Local Terminal Alternatives</span>
+                        </div>
+                        <div class="bg-slate-50 dark:bg-black p-4 font-mono text-xs text-slate-700 dark:text-slate-300">
+                            <div class="mb-2">
+                                <span class="text-indigo-500 select-none">$</span> openssl rsa -in encrypted.key -out
+                                unencrypted.key
+                            </div>
+                            <div>
+                                <span class="text-indigo-500 select-none">$</span> ssh-keygen -p -m PEM -N "" -f
+                                hostname.key
+                            </div>
                         </div>
                     </div>
-                    <p class="text-gray-600 mb-4">Paste your encrypted PEM private key and enter the password to
-                        decrypt it.</p>
+
+                    <p class="text-slate-500 dark:text-slate-400 mb-4 text-sm">Or paste your encrypted PEM private key
+                        below:</p>
+
                     <div class="space-y-4">
-                        <textarea id="pemText"
-                            class="w-full h-48 p-3 border border-gray-300 rounded-md shadow-sm form-input transition text-sm placeholder:text-xs placeholder:text-gray-400"
-                            placeholder="-----BEGIN ENCRYPTED PRIVATE KEY-----&#10;...&#10;-----END ENCRYPTED PRIVATE KEY-----"></textarea>
+                        <div class="relative group">
+                            <textarea id="pemText"
+                                class="w-full h-48 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm form-input transition text-xs leading-relaxed text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
+                                placeholder="-----BEGIN ENCRYPTED PRIVATE KEY-----&#10;...&#10;-----END ENCRYPTED PRIVATE KEY-----"></textarea>
+                            <button
+                                onclick="document.getElementById('pemText').value = ''; document.getElementById('pemText').focus();"
+                                class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 bg-transparent rounded-md transition-colors"
+                                title="Clear">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
 
                         <div class="flex flex-col sm:flex-row sm:items-end sm:space-x-4">
                             <div class="flex-grow">
-                                <label for="passphrase" class="block text-gray-600">Password</label>
+                                <label for="passphrase"
+                                    class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Key
+                                    Password</label>
                                 <input type="password" id="passphrase"
-                                    class="mt-1 w-full p-2 border border-gray-300 rounded-md shadow-sm form-input transition"
+                                    class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm form-input transition text-sm text-slate-900 dark:text-white"
                                     placeholder="••••••••••">
                             </div>
                             <button id="remove-password-button" onclick="removePassword()"
-                                class="mt-4 sm:mt-0 px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition whitespace-nowrap">
-                                Remove Password
+                                class="mt-4 sm:mt-0 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-semibold rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:ring-offset-slate-900 transition whitespace-nowrap text-sm">
+                                Decrypt Key
                             </button>
                         </div>
                     </div>
                     <div id="decryptedOutputSection" class="hidden">
-                        <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-2">🔓 Decrypted Key Output:</h3>
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-white mt-8 mb-3">Decrypted Key Output
+                        </h3>
                         <pre id="removerOutput"
-                            class="p-4 bg-gray-50 border border-gray-200 rounded-md result-box font-mono text-sm"></pre>
+                            class="p-4 bg-slate-50 dark:bg-black border border-slate-200 dark:border-slate-700 rounded-lg result-box font-mono text-xs text-slate-800 dark:text-emerald-400 overflow-x-auto"></pre>
                         <div id="removerDownloadContainer" class="mt-4"></div>
                     </div>
                 </div>
@@ -223,131 +357,145 @@
         </main>
     </div>
 
-    <!-- Templates for Certificate Chain Viewer -->
     <template id="loading-template">
-        <div class="text-center p-8">
+        <div class="text-center p-12">
             <div role="status" class="flex justify-center items-center flex-col">
-                <svg class="animate-spin h-10 w-10 text-indigo-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none"
-                    viewBox="0 0 24 24">
+                <svg class="animate-spin h-10 w-10 text-indigo-600 dark:text-indigo-500 mb-4"
+                    xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor"
                         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
                     </path>
                 </svg>
-                <span class="text-lg text-gray-500">Connecting and analyzing certificate chain...</span>
+                <span class="text-lg font-medium text-slate-600 dark:text-slate-300">Connecting and analyzing
+                    certificate chain...</span>
             </div>
         </div>
     </template>
+
     <template id="error-template">
-        <div class="bg-red-100 border border-red-300 text-red-800 p-4 rounded-lg flex items-start">
+        <div
+            class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 p-4 rounded-lg flex items-start">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                class="h-5 w-5 mr-3 flex-shrink-0">
+                class="h-5 w-5 mr-3 flex-shrink-0 mt-0.5">
                 <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path>
                 <line x1="12" y1="9" x2="12" y2="13"></line>
                 <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
             <div>
-                <h4 class="font-bold">Verification Failed</h4>
-                <p class="error-message"></p>
+                <h4 class="font-bold text-sm">Verification Failed</h4>
+                <p class="error-message text-sm mt-1 opacity-90"></p>
             </div>
         </div>
     </template>
+
     <template id="warning-template">
-        <div class="bg-yellow-100 border border-yellow-300 text-yellow-800 p-4 rounded-lg flex items-start mb-6">
+        <div
+            class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 p-4 rounded-lg flex items-start mb-6">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                class="h-5 w-5 mr-3 flex-shrink-0">
+                class="h-5 w-5 mr-3 flex-shrink-0 mt-0.5">
                 <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path>
                 <line x1="12" y1="9" x2="12" y2="13"></line>
                 <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
             <div>
-                <h4 class="font-bold">Missing Intermediate Certificate</h4>
-                <p>The server is not sending an intermediate certificate. While some browsers can fetch it, this can
-                    cause issues with other clients.</p>
+                <h4 class="font-bold text-sm">Missing Intermediate Certificate</h4>
+                <p class="text-sm mt-1 opacity-90">The server is not sending an intermediate certificate. While some
+                    browsers can fetch it, this can cause issues with other clients.</p>
             </div>
         </div>
     </template>
+
     <template id="certificate-card-template">
-        <div class="cert-card bg-gray-50 rounded-lg shadow-md border transition-all duration-300 mb-6">
-            <div class="px-4 py-4 sm:px-6 cert-header-container">
-                <!-- The certificate heading link will be inserted here by JS -->
+        <div
+            class="cert-card bg-slate-50 dark:bg-slate-850/50 rounded-lg shadow-sm border transition-all duration-300 mb-6 overflow-hidden">
+            <div class="px-5 py-4 cert-header-container bg-slate-100/50 dark:bg-slate-800/50">
             </div>
-            <div class="border-t border-gray-200 px-4 py-4 sm:px-6">
-                <dl class="divide-y divide-gray-200">
-                    <!-- Detail rows will be injected by JS -->
+            <div class="border-t border-slate-200 dark:border-slate-700 px-5 py-4">
+                <dl class="divide-y divide-slate-200 dark:divide-slate-700/50">
                 </dl>
             </div>
         </div>
     </template>
+
     <template id="chain-status-success-template">
-        <div class="bg-green-100 border border-green-300 text-green-800 p-4 rounded-lg flex items-start mb-6">
+        <div
+            class="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 p-4 rounded-lg flex items-start mb-6">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                class="h-5 w-5 mr-3 flex-shrink-0">
+                class="h-5 w-5 mr-3 flex-shrink-0 mt-0.5">
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                 <polyline points="22 4 12 14.01 9 11.01"></polyline>
             </svg>
             <div>
-                <h4 class="font-bold">Certificate Chain Valid</h4>
-                <p class="chain-status-message"></p>
+                <h4 class="font-bold text-sm">Certificate Chain Valid</h4>
+                <p class="chain-status-message text-sm mt-1 opacity-90"></p>
             </div>
         </div>
     </template>
+
     <template id="chain-status-warning-template">
-        <div class="bg-orange-100 border border-orange-300 text-orange-800 p-4 rounded-lg flex items-start mb-6">
+        <div
+            class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 p-4 rounded-lg flex items-start mb-6">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                class="h-5 w-5 mr-3 flex-shrink-0">
+                class="h-5 w-5 mr-3 flex-shrink-0 mt-0.5">
                 <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path>
                 <line x1="12" y1="9" x2="12" y2="13"></line>
                 <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
             <div>
-                <h4 class="font-bold">Certificate Issues Detected</h4>
-                <p class="chain-status-message"></p>
-                <ul class="chain-status-issues mt-2 text-sm list-disc list-inside"></ul>
+                <h4 class="font-bold text-sm">Certificate Issues Detected</h4>
+                <p class="chain-status-message text-sm mt-1 opacity-90"></p>
+                <ul class="chain-status-issues mt-2 text-sm list-disc list-inside opacity-90"></ul>
             </div>
         </div>
     </template>
+
     <template id="chain-status-critical-template">
-        <div class="bg-red-100 border border-red-400 text-red-800 p-4 rounded-lg flex items-start mb-6">
+        <div
+            class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 p-4 rounded-lg flex items-start mb-6">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                class="h-5 w-5 mr-3 flex-shrink-0">
+                class="h-5 w-5 mr-3 flex-shrink-0 mt-0.5">
                 <circle cx="12" cy="12" r="10"></circle>
                 <line x1="15" y1="9" x2="9" y2="15"></line>
                 <line x1="9" y1="9" x2="15" y2="15"></line>
             </svg>
             <div>
-                <h4 class="font-bold">Critical Certificate Issue</h4>
-                <p class="chain-status-message"></p>
-                <ul class="chain-status-issues mt-2 text-sm list-disc list-inside"></ul>
+                <h4 class="font-bold text-sm">Critical Certificate Issue</h4>
+                <p class="chain-status-message text-sm mt-1 opacity-90"></p>
+                <ul class="chain-status-issues mt-2 text-sm list-disc list-inside opacity-90"></ul>
             </div>
         </div>
     </template>
+
     <template id="sslyze-loading-template">
-        <div class="text-center p-8 bg-white rounded-lg shadow-md border border-gray-200">
+        <div
+            class="text-center p-8 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
             <div role="status" class="flex justify-center items-center flex-col">
-                <svg class="animate-spin h-10 w-10 text-indigo-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none"
-                    viewBox="0 0 24 24">
+                <svg class="animate-spin h-8 w-8 text-indigo-600 dark:text-indigo-400 mb-3"
+                    xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor"
                         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
                     </path>
                 </svg>
-                <span class="text-lg text-gray-500">Running vulnerability scan...</span>
-                <span class="text-sm text-gray-400 mt-2">This may take up to 2 minutes</span>
+                <span class="text-md font-medium text-slate-700 dark:text-slate-300">Running vulnerability
+                    scan...</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400 mt-1">This may take up to 2 minutes</span>
             </div>
         </div>
     </template>
+
     <template id="sslyze-results-template">
-        <div class="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-            <h3 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                    class="mr-2 text-indigo-600">
+                    class="mr-2 text-indigo-600 dark:text-indigo-400">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                     <path d="m9 12 2 2 4-4"></path>
                 </svg>
@@ -358,6 +506,46 @@
     </template>
 
     <script>
+        // --- Dark Mode Logic ---
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
+        const themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
+
+        // Check local storage or system preference
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+            themeToggleLightIcon.classList.remove('hidden');
+        } else {
+            document.documentElement.classList.remove('dark');
+            themeToggleDarkIcon.classList.remove('hidden');
+        }
+
+        themeToggleBtn.addEventListener('click', function () {
+            // Toggle icons
+            themeToggleDarkIcon.classList.toggle('hidden');
+            themeToggleLightIcon.classList.toggle('hidden');
+
+            // If is set in local storage
+            if (localStorage.getItem('color-theme')) {
+                if (localStorage.getItem('color-theme') === 'light') {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                }
+            } else {
+                // If not set locally
+                if (document.documentElement.classList.contains('dark')) {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                } else {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                }
+            }
+        });
+
         // --- Tab Switching Logic with URL Hash Routing ---
         function switchTab(tabName, event) {
             if (event) {
@@ -367,10 +555,8 @@
             // Update URL hash - don't add hash for default tab (cert_chain)
             let newUrl;
             if (tabName === 'cert_chain') {
-                // Default tab - just use query params, no hash needed
                 newUrl = window.location.search || window.location.pathname;
             } else {
-                // Non-default tabs - add hash, remove query params
                 newUrl = window.location.pathname + '#' + tabName;
             }
             history.replaceState(null, '', newUrl);
@@ -390,7 +576,6 @@
             let hash = window.location.hash.replace('#', '');
             const validTabs = ['cert_chain', 'decoder', 'decryption'];
 
-            // If no hash but we have hostname/port params, default to cert_chain
             if (!hash && window.location.search) {
                 const params = new URLSearchParams(window.location.search);
                 if (params.get('hostname')) {
@@ -399,7 +584,6 @@
             }
 
             if (hash && validTabs.includes(hash)) {
-                // Use internal switch (don't update URL again)
                 document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
                 document.querySelectorAll('.tab-button').forEach(button => button.classList.remove('active'));
                 document.getElementById('tab-' + hash).classList.add('active');
@@ -410,7 +594,6 @@
             }
         }
 
-        // Toggle cipher list visibility
         function toggleCipherList(id) {
             const el = document.getElementById(id);
             if (el) {
@@ -418,10 +601,7 @@
             }
         }
 
-        // Listen for hash changes (back/forward navigation)
         window.addEventListener('hashchange', handleHashChange);
-
-        // Check hash on initial load
         document.addEventListener('DOMContentLoaded', function () {
             handleHashChange();
         });
@@ -446,22 +626,20 @@
                 sslyzeResultsContainer.innerHTML = '';
                 setLoading(true);
 
-                // Sanitize and update hostname input
                 let hostname = hostnameInput.value.trim();
-                hostname = hostname.replace(/^[^a-zA-Z0-9]+/, ''); // Remove leading bullets, spaces, dashes, etc.
-                hostname = hostname.replace(/^.*\/\//, ''); // Remove anything with *// pattern (protocols, etc.)
-                hostname = hostname.replace(/[\/?#].*$/, ''); // Remove path/query/fragment
-                hostname = hostname.replace(/:\d+$/, ''); // Remove port if included
-                hostname = hostname.trim();
-                hostnameInput.value = hostname; // Update textbox with sanitized value
+                hostname = hostname.replace(/^[^a-zA-Z0-9]+/, '').replace(/^.*\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '').trim();
+                hostnameInput.value = hostname;
 
-                // Sanitize and update port input
                 let port = portInput.value.trim();
-                portInput.value = port; // Update textbox with trimmed value
+                portInput.value = port;
 
                 const runEnhancedScan = enhancedScanCheckbox && enhancedScanCheckbox.checked;
 
                 try {
+                    // Inject Loading Template
+                    const loadingTemplate = document.getElementById('loading-template');
+                    resultsContainer.appendChild(loadingTemplate.content.cloneNode(true));
+
                     const response = await fetch('verify-cert.php', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -469,28 +647,26 @@
                     });
 
                     const data = await response.json();
+
+                    // Clear loading state
+                    resultsContainer.innerHTML = '';
+
                     if (!response.ok) { throw new Error(data.error || `HTTP error! status: ${response.status}`); }
 
-                    // Update URL with query parameters (no hash for default cert_chain tab)
                     const newUrl = `${window.location.pathname}?hostname=${encodeURIComponent(hostname)}&port=${encodeURIComponent(port)}`;
                     history.replaceState(null, '', newUrl);
 
-                    // Handle new response format with chainStatus and certificates
-                    const chainStatus = data.chainStatus;
-                    const certificates = data.certificates;
-                    const serverHeader = data.serverHeader;
+                    renderChainStatus(data.chainStatus);
+                    renderServerHeader(data.serverHeader);
+                    renderCertificates(data.certificates);
 
-                    renderChainStatus(chainStatus);
-                    renderServerHeader(serverHeader);
-                    renderCertificates(certificates);
-
-                    // Run SSLyze scan if checkbox is checked
                     if (runEnhancedScan) {
                         runSslyzeScan(hostname, port);
                     }
 
                 } catch (err) {
-                    renderError(err.message || 'An unexpected error occurred. Check browser console or server logs.');
+                    resultsContainer.innerHTML = ''; // Clear loading
+                    renderError(err.message || 'An unexpected error occurred.');
                 } finally {
                     setLoading(false);
                 }
@@ -499,15 +675,11 @@
             const renderChainStatus = (chainStatus) => {
                 if (!chainStatus) return;
 
-                // Check for critical issues (revoked or expired)
                 const isRevoked = chainStatus.revocationStatus === 'revoked';
-                const isExpired = chainStatus.issues && chainStatus.issues.some(issue =>
-                    issue.toLowerCase().includes('expired')
-                );
+                const isExpired = chainStatus.issues && chainStatus.issues.some(issue => issue.toLowerCase().includes('expired'));
                 const isCritical = isRevoked || isExpired;
 
                 if (chainStatus.isValid && !isCritical) {
-                    // Valid chain - show green success
                     const successTemplate = document.getElementById('chain-status-success-template');
                     if (successTemplate) {
                         const node = successTemplate.content.cloneNode(true);
@@ -515,7 +687,6 @@
                         resultsContainer.appendChild(node);
                     }
                 } else if (isCritical) {
-                    // Critical issue (revoked or expired) - show red critical
                     const criticalTemplate = document.getElementById('chain-status-critical-template');
                     if (criticalTemplate) {
                         const node = criticalTemplate.content.cloneNode(true);
@@ -531,7 +702,6 @@
                         resultsContainer.appendChild(node);
                     }
                 } else {
-                    // Other issues - show orange warning
                     const warningTemplate = document.getElementById('chain-status-warning-template');
                     if (warningTemplate) {
                         const node = warningTemplate.content.cloneNode(true);
@@ -553,13 +723,11 @@
                 if (!serverHeader) return;
 
                 const serverDiv = document.createElement('div');
-                serverDiv.className = 'bg-slate-100 border border-slate-300 text-slate-700 p-3 rounded-lg flex items-center mb-4 text-sm';
+                serverDiv.className = 'bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 p-3 rounded-lg flex items-center mb-4 text-sm';
                 serverDiv.innerHTML = `
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2 flex-shrink-0 text-slate-500">
                         <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
                         <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
-                        <line x1="6" y1="6" x2="6.01" y2="6"></line>
-                        <line x1="6" y1="18" x2="6.01" y2="18"></line>
                     </svg>
                     <span><strong>HTTP Server:</strong> ${serverHeader}</span>
                 `;
@@ -578,7 +746,7 @@
                     const isSelfSigned = cert.type === 'Self-Signed Certificate';
                     let certTypeHTML = `<span class="cert-type">${cert.type}</span>`;
                     if (isSelfSigned) {
-                        certTypeHTML = `<span class="cert-type text-red-600 font-semibold">${cert.type}</span>`;
+                        certTypeHTML = `<span class="cert-type text-red-600 dark:text-red-400 font-semibold">${cert.type}</span>`;
                     }
 
                     if (cert.pem) {
@@ -589,20 +757,27 @@
                         const link = document.createElement('a');
                         link.href = url;
                         link.download = filename;
-                        link.className = 'flex items-center text-lg leading-6 font-medium text-gray-900 hover:text-indigo-600 hover:underline';
+                        link.className = 'flex items-center text-lg leading-6 font-medium text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors';
                         link.innerHTML = `
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="cert-icon mr-2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                            ${certTypeHTML}: <span class="cert-common-name ml-2 text-gray-700 font-normal">${cert.commonName}</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-2 text-gray-400"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="cert-icon mr-2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                            ${certTypeHTML}: <span class="cert-common-name ml-2 text-slate-700 dark:text-slate-300 font-normal">${cert.commonName}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-2 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                         `;
                         headerContainer.appendChild(link);
                     } else {
-                        headerContainer.innerHTML = `<h3 class="text-lg leading-6 font-medium text-gray-900 flex items-center">...</h3>`;
+                        headerContainer.innerHTML = `<h3 class="text-lg leading-6 font-medium text-slate-900 dark:text-white flex items-center">...</h3>`;
                     }
 
                     const isLeaf = cert.type === 'Leaf' || isSelfSigned;
-                    cardNode.querySelector('.cert-card').classList.add(isLeaf ? 'border-indigo-400' : 'border-gray-300');
-                    cardNode.querySelector('.cert-icon').classList.add(isLeaf ? 'text-indigo-600' : 'text-gray-500');
+                    const card = cardNode.querySelector('.cert-card');
+
+                    if (isLeaf) {
+                        card.classList.add('border-indigo-200', 'dark:border-indigo-900', 'ring-1', 'ring-indigo-500/20');
+                        cardNode.querySelector('.cert-icon').classList.add('text-indigo-600', 'dark:text-indigo-400');
+                    } else {
+                        card.classList.add('border-slate-200', 'dark:border-slate-700');
+                        cardNode.querySelector('.cert-icon').classList.add('text-slate-400', 'dark:text-slate-500');
+                    }
 
                     dl.appendChild(createDetailRow('Common Name', cert.commonName));
                     if (isLeaf) {
@@ -610,13 +785,13 @@
                     }
 
                     const serialNumberDecimal = cert.serialNumberHex ? BigInt('0x' + cert.serialNumberHex.replace(/[^0-9a-fA-F]/g, '')).toString() : 'N/A';
-                    const serialNumberHTML = `${cert.serialNumberHex} <br> <span class="text-gray-500 text-xs">(Decimal: ${serialNumberDecimal})</span>`;
+                    const serialNumberHTML = `<span class="font-mono text-xs">${cert.serialNumberHex}</span> <br> <span class="text-slate-500 text-xs">(Decimal: ${serialNumberDecimal})</span>`;
                     dl.appendChild(createDetailRow('Serial Number', serialNumberHTML));
 
                     const validFromDate = new Date(cert.validFrom);
                     const validUntilDate = new Date(cert.validUntil);
                     const isExpired = validUntilDate < new Date();
-                    const validUntilHTML = `<span class="${isExpired ? 'text-red-600 font-semibold' : ''}">${validUntilDate.toUTCString()}</span>`;
+                    const validUntilHTML = `<span class="${isExpired ? 'text-red-600 dark:text-red-400 font-semibold' : ''}">${validUntilDate.toUTCString()}</span>`;
 
                     dl.appendChild(createDetailRow('Valid From', validFromDate.toUTCString()));
                     dl.appendChild(createDetailRow('Valid Until', validUntilHTML));
@@ -645,37 +820,19 @@
                     // Check if response is JSON
                     const contentType = response.headers.get('content-type');
                     if (!contentType || !contentType.includes('application/json')) {
-                        const text = await response.text();
-                        throw new Error('Server returned non-JSON response. Check server logs.');
+                        throw new Error('Server returned non-JSON response.');
                     }
 
                     const data = await response.json();
-
-                    // Handle HTTP errors
-                    if (!response.ok) {
-                        throw new Error(data.error || `SSLyze error: ${response.status}`);
-                    }
-
-                    // Handle scan failures that return success=false
+                    if (!response.ok) throw new Error(data.error || `SSLyze error: ${response.status}`);
                     if (data.success === false && data.error) {
-                        sslyzeResultsContainer.innerHTML = `
-                            <div class="bg-yellow-100 border border-yellow-300 text-yellow-800 p-4 rounded-lg">
-                                <h4 class="font-bold">Vulnerability Scan Notice</h4>
-                                <p>${data.error}</p>
-                            </div>
-                        `;
+                        sslyzeResultsContainer.innerHTML = `<div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 p-4 rounded-lg"><h4 class="font-bold text-sm">Vulnerability Scan Notice</h4><p class="text-sm mt-1">${data.error}</p></div>`;
                         return;
                     }
-
                     renderSslyzeResults(data);
 
                 } catch (err) {
-                    sslyzeResultsContainer.innerHTML = `
-                        <div class="bg-red-100 border border-red-300 text-red-800 p-4 rounded-lg">
-                            <h4 class="font-bold">Vulnerability Scan Failed</h4>
-                            <p>${err.message}</p>
-                        </div>
-                    `;
+                    sslyzeResultsContainer.innerHTML = `<div class="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-800 text-red-800 dark:text-red-200 p-4 rounded-lg"><h4 class="font-bold text-sm">Vulnerability Scan Failed</h4><p class="text-sm mt-1">${err.message}</p></div>`;
                 }
             };
 
@@ -685,144 +842,86 @@
                 const contentDiv = node.querySelector('.sslyze-content');
 
                 let html = '';
-
-                // Overall status banner
                 const statusColors = {
-                    'PASS': 'bg-green-100 border-green-300 text-green-800',
-                    'INFO': 'bg-blue-100 border-blue-300 text-blue-800',
-                    'WARNING': 'bg-yellow-100 border-yellow-300 text-yellow-800',
-                    'CRITICAL': 'bg-red-100 border-red-300 text-red-800'
+                    'PASS': 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300',
+                    'INFO': 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300',
+                    'WARNING': 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300',
+                    'CRITICAL': 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-800 text-red-800 dark:text-red-300'
                 };
                 const statusColor = statusColors[data.overallStatus] || statusColors['INFO'];
-                html += `<div class="p-3 rounded-md border mb-4 ${statusColor}">
+                html += `<div class="p-3 rounded-md border mb-6 ${statusColor} text-sm">
                     <strong>Status:</strong> ${data.summary || 'Scan complete'}
                 </div>`;
 
-                // Protocol Support
                 if (data.protocolSupport && data.protocolSupport.length > 0) {
-                    html += `<h4 class="text-md font-semibold text-gray-700 mt-4 mb-2">Protocol Support</h4>`;
-                    html += `<div class="overflow-x-auto"><table class="min-w-full text-sm">
-                        <thead><tr class="bg-gray-100">
-                            <th class="px-3 py-2 text-left">Protocol</th>
-                            <th class="px-3 py-2 text-left">Status</th>
-                            <th class="px-3 py-2 text-left">Ciphers</th>
-                        </tr></thead><tbody>`;
+                    html += `<h4 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-4 mb-2">Protocol Support</h4>`;
+                    html += `<div class="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"><table class="min-w-full text-sm divide-y divide-slate-200 dark:divide-slate-700">
+                        <thead class="bg-slate-50 dark:bg-slate-900/50"><tr>
+                            <th class="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Protocol</th>
+                            <th class="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Status</th>
+                            <th class="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Ciphers</th>
+                        </tr></thead><tbody class="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-800">`;
+
                     data.protocolSupport.forEach((proto, index) => {
                         let statusClass, statusText;
                         if (proto.supported) {
                             if (proto.deprecated) {
-                                // Enabled but deprecated = bad (orange warning)
-                                statusClass = 'text-orange-600';
+                                statusClass = 'text-amber-600 dark:text-amber-400';
                                 statusText = '⚠️ Enabled (Deprecated)';
                             } else {
-                                // Enabled and modern = good (green)
-                                statusClass = 'text-green-600';
+                                statusClass = 'text-emerald-600 dark:text-emerald-400';
                                 statusText = '✅ Enabled';
                             }
                         } else {
                             if (proto.deprecated) {
-                                // Disabled and deprecated = good (green - correct config)
-                                statusClass = 'text-green-600';
+                                statusClass = 'text-emerald-600 dark:text-emerald-400';
                                 statusText = '🚫 Disabled';
                             } else {
-                                // Disabled and modern = neutral (gray)
-                                statusClass = 'text-gray-400';
+                                statusClass = 'text-slate-400 dark:text-slate-500';
                                 statusText = '❌ Disabled';
                             }
                         }
                         const cipherCount = proto.cipherCount || 0;
                         const cipherClickable = cipherCount > 0 ?
-                            `<button class="text-indigo-600 underline hover:text-indigo-800 cursor-pointer" onclick="toggleCipherList('cipher-list-${index}')">${cipherCount}</button>` :
+                            `<button class="text-indigo-600 dark:text-indigo-400 underline hover:text-indigo-800 dark:hover:text-indigo-300 cursor-pointer" onclick="toggleCipherList('cipher-list-${index}')">${cipherCount}</button>` :
                             '-';
                         const cipherListHtml = proto.ciphers && proto.ciphers.length > 0 ?
-                            `<div id="cipher-list-${index}" class="hidden mt-2 p-2 bg-gray-50 rounded text-xs">
-                                <strong>${proto.protocol} Ciphers:</strong>
-                                <ul class="list-disc list-inside mt-1">
-                                    ${proto.ciphers.map(c => `<li class="font-mono">${c}</li>`).join('')}
+                            `<div id="cipher-list-${index}" class="hidden mt-2 p-3 bg-slate-50 dark:bg-black rounded border border-slate-100 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300">
+                                <strong class="block mb-1">${proto.protocol} Ciphers:</strong>
+                                <ul class="list-disc list-inside space-y-0.5 font-mono">
+                                    ${proto.ciphers.map(c => `<li>${c}</li>`).join('')}
                                 </ul>
                             </div>` : '';
-                        html += `<tr class="border-b">
-                            <td class="px-3 py-2">${proto.protocol}</td>
-                            <td class="px-3 py-2 ${statusClass}">${statusText}</td>
-                            <td class="px-3 py-2">${cipherClickable}</td>
+                        html += `<tr>
+                            <td class="px-4 py-3 text-slate-900 dark:text-slate-200">${proto.protocol}</td>
+                            <td class="px-4 py-3 ${statusClass} font-medium">${statusText}</td>
+                            <td class="px-4 py-3 text-slate-700 dark:text-slate-300">${cipherClickable}</td>
                         </tr>
                         <tr class="${proto.ciphers && proto.ciphers.length > 0 ? '' : 'hidden'}">
-                            <td colspan="3" class="p-0">${cipherListHtml}</td>
+                            <td colspan="3" class="px-4 py-0 border-0">${cipherListHtml}</td>
                         </tr>`;
                     });
                     html += `</tbody></table></div>`;
                 }
 
-                // Security Checks (passed and failed)
                 if (data.securityChecks && data.securityChecks.length > 0) {
-                    html += `<h4 class="text-md font-semibold text-gray-700 mt-4 mb-2">Security Checks</h4>`;
-                    html += `<div class="overflow-x-auto"><table class="min-w-full text-sm">
-                        <thead><tr class="bg-gray-100">
-                            <th class="px-3 py-2 text-left">Check</th>
-                            <th class="px-3 py-2 text-left">Status</th>
-                            <th class="px-3 py-2 text-left">Details</th>
-                        </tr></thead><tbody>`;
+                    html += `<h4 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-6 mb-2">Security Checks</h4>`;
+                    html += `<div class="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"><table class="min-w-full text-sm divide-y divide-slate-200 dark:divide-slate-700">
+                        <thead class="bg-slate-50 dark:bg-slate-900/50"><tr>
+                            <th class="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Check</th>
+                            <th class="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Status</th>
+                            <th class="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Details</th>
+                        </tr></thead><tbody class="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-800">`;
                     data.securityChecks.forEach(check => {
-                        const statusClass = check.passed ? 'text-green-600' : 'text-red-600';
+                        const statusClass = check.passed ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
                         const statusText = check.passed ? '✅ PASS' : '❌ FAIL';
-                        html += `<tr class="border-b">
-                            <td class="px-3 py-2 font-medium">${check.name}</td>
-                            <td class="px-3 py-2 ${statusClass}">${statusText}</td>
-                            <td class="px-3 py-2 text-gray-600">${check.description}</td>
+                        html += `<tr>
+                            <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-200">${check.name}</td>
+                            <td class="px-4 py-3 ${statusClass} font-bold">${statusText}</td>
+                            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">${check.description}</td>
                         </tr>`;
                     });
                     html += `</tbody></table></div>`;
-                }
-
-                // Additional vulnerabilities (deprecated protocols, etc.)
-                if (data.vulnerabilities && data.vulnerabilities.length > 0) {
-                    const nonSecurityCheckVulns = data.vulnerabilities.filter(v =>
-                        v.name.includes('Deprecated Protocol')
-                    );
-                    if (nonSecurityCheckVulns.length > 0) {
-                        html += `<h4 class="text-md font-semibold text-gray-700 mt-4 mb-2">Configuration Issues</h4>`;
-                        html += `<div class="space-y-2">`;
-                        nonSecurityCheckVulns.forEach(vuln => {
-                            const sevColors = {
-                                'CRITICAL': 'bg-red-100 border-red-400 text-red-800',
-                                'HIGH': 'bg-orange-100 border-orange-400 text-orange-800',
-                                'MEDIUM': 'bg-yellow-100 border-yellow-400 text-yellow-800',
-                                'LOW': 'bg-blue-100 border-blue-400 text-blue-800'
-                            };
-                            const sevColor = sevColors[vuln.severity] || sevColors['MEDIUM'];
-                            html += `<div class="p-3 rounded-md border ${sevColor}">
-                                <strong>${vuln.name}</strong> <span class="text-xs">[${vuln.severity}]</span>
-                                <p class="text-sm mt-1">${vuln.description}</p>
-                            </div>`;
-                        });
-                        html += `</div>`;
-                    }
-                }
-
-                // Cipher Suites (sample)
-                if (data.cipherSuites && data.cipherSuites.length > 0) {
-                    html += `<h4 class="text-md font-semibold text-gray-700 mt-4 mb-2">Sample Cipher Suites</h4>`;
-                    html += `<div class="overflow-x-auto"><table class="min-w-full text-sm">
-                        <thead><tr class="bg-gray-100">
-                            <th class="px-3 py-2 text-left">Cipher</th>
-                            <th class="px-3 py-2 text-left">Protocol</th>
-                            <th class="px-3 py-2 text-left">Key Size</th>
-                        </tr></thead><tbody>`;
-                    data.cipherSuites.slice(0, 10).forEach(cipher => {
-                        html += `<tr class="border-b">
-                            <td class="px-3 py-2 font-mono text-xs">${cipher.name}</td>
-                            <td class="px-3 py-2">${cipher.protocol}</td>
-                            <td class="px-3 py-2">${cipher.keySize} bits</td>
-                        </tr>`;
-                    });
-                    html += `</tbody></table></div>`;
-                }
-
-                // Error output
-                if (!data.success && data.error) {
-                    html += `<div class="p-3 rounded-md border bg-red-50 border-red-200 text-red-700 mt-4">
-                        <strong>Error:</strong> ${data.error}
-                    </div>`;
                 }
 
                 contentDiv.innerHTML = html;
@@ -847,8 +946,8 @@
             function createDetailRow(label, valueHTML) {
                 const row = document.createElement('div');
                 row.className = 'py-3 sm:grid sm:grid-cols-3 sm:gap-4';
-                row.innerHTML = `<dt class="text-sm font-medium text-gray-500">${label}</dt>
-                                 <dd class="mt-1 text-sm text-gray-800 sm:mt-0 sm:col-span-2 break-words">${valueHTML}</dd>`;
+                row.innerHTML = `<dt class="text-sm font-medium text-slate-500 dark:text-slate-400">${label}</dt>
+                                 <dd class="mt-1 text-sm text-slate-800 dark:text-slate-200 sm:mt-0 sm:col-span-2 break-words">${valueHTML}</dd>`;
                 return row;
             }
 
@@ -859,10 +958,11 @@
         function decodeCert() {
             const output = document.getElementById('decoderOutput');
             output.innerHTML = '';
-            output.className = 'mt-6 p-4 bg-gray-50 border border-gray-200 rounded-md result-box'; // Reset class
+            output.className = 'mt-6'; // Reset
+
             let pem = document.getElementById('certInput').value.trim();
             if (!pem) {
-                displayError(output, 'Please paste a certificate or CSR.');
+                output.innerHTML = `<div class="p-4 text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800" role="alert"><strong class="font-bold">Error:</strong> Please paste a certificate or CSR.</div>`;
                 return;
             }
 
@@ -879,11 +979,16 @@
 
             try {
                 const cert = forge.pki.certificateFromPem(pem);
-                let html = '';
+                let html = '<div class="bg-slate-50 dark:bg-black rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">';
 
                 const createSection = (title, content) => {
                     if (!content || content.trim() === '') return '';
-                    return `<div class="mt-4 first:mt-0"><h4 class="text-md font-semibold text-indigo-700 border-b border-gray-200 pb-1 mb-2">${title}</h4><div class="space-y-1 text-sm">${content}</div></div>`;
+                    return `<div class="border-b border-slate-200 dark:border-slate-700 last:border-0">
+                        <div class="px-4 py-2 bg-slate-100/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
+                            <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">${title}</h4>
+                        </div>
+                        <div class="p-4 space-y-1 text-sm text-slate-800 dark:text-slate-300 font-mono text-xs">${content}</div>
+                    </div>`;
                 };
 
                 const getSortOrder = (shortName) => {
@@ -895,49 +1000,46 @@
                     return [...attributes].sort((a, b) => getSortOrder(a.shortName) - getSortOrder(b.shortName));
                 };
 
-                let subjectContent = sortAttributes(cert.subject.attributes).map(attr => `<div class="ml-4"><strong class="font-medium">${attr.shortName || attr.name}</strong> = ${attr.value}</div>`).join('');
+                let subjectContent = sortAttributes(cert.subject.attributes).map(attr => `<div><span class="text-indigo-600 dark:text-indigo-400 font-bold">${attr.shortName || attr.name}</span> = <span class="break-all">${attr.value}</span></div>`).join('');
                 html += createSection('Subject', subjectContent);
 
-                let issuerContent = sortAttributes(cert.issuer.attributes).map(attr => `<div class="ml-4">${attr.shortName || attr.name} = ${attr.value}</div>`).join('');
+                let issuerContent = sortAttributes(cert.issuer.attributes).map(attr => `<div><span class="text-slate-500">${attr.shortName || attr.name}</span> = <span class="break-all">${attr.value}</span></div>`).join('');
                 html += createSection('Issuer', issuerContent);
 
-                html += createSection('Serial Number', `<div class="ml-4">${cert.serialNumber}</div>`);
+                html += createSection('Serial Number', `<div>${cert.serialNumber}</div>`);
 
                 const isExpired = new Date() > new Date(cert.validity.notAfter);
-                const validityDateClass = isExpired ? 'text-red-600 font-semibold' : '';
-                let validityContent = `<div class="ml-4">Valid From: ${new Date(cert.validity.notBefore).toUTCString()}</div>`;
-                validityContent += `<div class="ml-4">Valid To: <span class="${validityDateClass}">${new Date(cert.validity.notAfter).toUTCString()}</span></div>`;
+                const validityDateClass = isExpired ? 'text-red-600 dark:text-red-400 font-bold' : '';
+                let validityContent = `<div>Valid From: ${new Date(cert.validity.notBefore).toUTCString()}</div>`;
+                validityContent += `<div>Valid To: <span class="${validityDateClass}">${new Date(cert.validity.notAfter).toUTCString()}</span></div>`;
                 html += createSection('Validity Period', validityContent);
 
-                const sigAlg = forge.pki.oids[cert.signatureOid] || cert.signatureOid;
-                html += createSection('Signature Algorithm', `<div class="ml-4">${sigAlg}</div>`);
                 const pubKey = cert.publicKey;
                 let pubAlg = 'Unknown';
-                if (pubKey.n) {
-                    pubAlg = `RSA (${pubKey.n.toString(2).length} bits)`;
-                } else if (pubKey.ecparams) {
+                if (pubKey.n) pubAlg = `RSA (${pubKey.n.toString(2).length} bits)`;
+                else if (pubKey.ecparams) {
                     const curveOid = forge.pki.oids[pubKey.ecparams.curve.oid];
                     pubAlg = `ECDSA (${curveOid || 'Unknown Curve'})`;
                 }
-                html += createSection('Public Key Algorithm', `<div class="ml-4">${pubAlg}</div>`);
+                html += createSection('Public Key Info', `<div>${pubAlg}</div>`);
 
                 let extensionsContent = '';
                 cert.extensions.forEach(ext => {
                     let extDetails = '';
                     switch (ext.name) {
                         case 'subjectKeyIdentifier':
-                            extDetails = `<div class="ml-8">${ext.subjectKeyIdentifier}</div>`;
+                            extDetails = `<div class="ml-4 text-slate-600 dark:text-slate-400">${ext.subjectKeyIdentifier}</div>`;
                             break;
                         case 'authorityKeyIdentifier':
                             if (ext.keyIdentifier) {
-                                extDetails = `<div class="ml-8">${ext.keyIdentifier}</div>`;
+                                extDetails = `<div class="ml-4 text-slate-600 dark:text-slate-400">${ext.keyIdentifier}</div>`;
                             }
                             break;
                         case 'keyUsage':
                             for (const usage in ext) {
                                 if (ext[usage] === true && usage !== 'name' && usage !== 'critical') {
                                     const friendlyName = usage.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                                    extDetails += `<div class="ml-8">- ${friendlyName}</div>`;
+                                    extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- ${friendlyName}</div>`;
                                 }
                             }
                             break;
@@ -945,21 +1047,21 @@
                             const knownUsages = { serverAuth: 'Server Authentication', clientAuth: 'Client Authentication', codeSigning: 'Code Signing', emailProtection: 'Email Protection', timeStamping: 'Timestamping' };
                             for (const usage in knownUsages) {
                                 if (ext[usage] === true) {
-                                    extDetails += `<div class="ml-8">- ${knownUsages[usage]}</div>`;
+                                    extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- ${knownUsages[usage]}</div>`;
                                 }
                             }
                             if (ext.extra) {
                                 ext.extra.forEach(oid => {
                                     const oidName = forge.pki.oids[oid] || oid;
                                     if (!Object.keys(knownUsages).some(key => forge.pki.oids[key] === oid)) {
-                                        extDetails += `<div class="ml-8">- ${oidName}</div>`;
+                                        extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- ${oidName}</div>`;
                                     }
                                 });
                             }
                             break;
                         case 'cRLDistributionPoints':
                             if (ext.uris) {
-                                ext.uris.forEach(uri => extDetails += `<div class="ml-8">- URI: ${uri}</div>`);
+                                ext.uris.forEach(uri => extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- URI: ${uri}</div>`);
                             }
                             break;
                         case 'authorityInfoAccess':
@@ -970,9 +1072,9 @@
                                 for (const ad of aia.value) {
                                     const adOid = forge.asn1.derToOid(ad.value[0].value);
                                     if (adOid === ocspOid) {
-                                        extDetails += `<div class="ml-8">- OCSP URI: ${ad.value[1].value}</div>`;
+                                        extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- OCSP URI: ${ad.value[1].value}</div>`;
                                     } else if (adOid === caIssuersOid) {
-                                        extDetails += `<div class="ml-8">- CA Issuers URI: ${ad.value[1].value}</div>`;
+                                        extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- CA Issuers URI: ${ad.value[1].value}</div>`;
                                     }
                                 }
                             } catch (e) { /* ignore parsing errors */ }
@@ -982,24 +1084,25 @@
                                 let label = 'Other', displayValue = alt.value;
                                 if (alt.type === 2) label = 'DNS';
                                 else if (alt.type === 7) label = 'IP Address';
-                                extDetails += `<div class="ml-8">- ${label}: ${displayValue}</div>`;
+                                extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- ${label}: ${displayValue}</div>`;
                             });
                             break;
                         case 'basicConstraints':
-                            extDetails += `<div class="ml-8">- CA: ${ext.cA ? 'Yes' : 'No'}</div>`;
+                            extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- CA: ${ext.cA ? 'Yes' : 'No'}</div>`;
                             break;
                         default:
-                            extDetails = `<div class="ml-8 text-gray-500">(OID: ${ext.id})</div>`;
+                            extDetails = `<div class="ml-4 text-slate-500 dark:text-slate-500 text-xs">(OID: ${ext.id})</div>`;
                     }
                     if (extDetails) {
-                        extensionsContent += `<div class="ml-4 mt-2 font-medium">${ext.name || ext.id}:</div>` + extDetails;
+                        extensionsContent += `<div class="mb-2"><div class="font-semibold text-slate-700 dark:text-slate-300">${ext.name || ext.id}</div>${extDetails}</div>`;
                     }
                 });
                 if (extensionsContent) html += createSection('Extensions', extensionsContent);
 
+                html += '</div>';
                 output.innerHTML = html;
             } catch (e) {
-                displayError(output, 'Error parsing certificate: ' + e.message);
+                output.innerHTML = `<div class="p-4 text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800"><strong class="font-bold">Parsing Error:</strong> ${e.message}</div>`;
             }
         }
 
@@ -1007,11 +1110,16 @@
             const output = document.getElementById('decoderOutput');
             try {
                 const csr = forge.pki.certificationRequestFromPem(pem);
-                let html = '<h3>Certificate Signing Request (CSR) Details</h3>';
+                let html = '<div class="bg-slate-50 dark:bg-black rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">';
 
                 const createSection = (title, content) => {
                     if (!content || content.trim() === '') return '';
-                    return `<div class="mt-4 first:mt-0"><h4 class="text-md font-semibold text-indigo-700 border-b border-gray-200 pb-1 mb-2">${title}</h4><div class="space-y-1 text-sm">${content}</div></div>`;
+                    return `<div class="border-b border-slate-200 dark:border-slate-700 last:border-0">
+                        <div class="px-4 py-2 bg-slate-100/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
+                            <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">${title}</h4>
+                        </div>
+                        <div class="p-4 space-y-1 text-sm text-slate-800 dark:text-slate-300 font-mono text-xs">${content}</div>
+                    </div>`;
                 };
 
                 const getSortOrder = (shortName) => {
@@ -1023,11 +1131,11 @@
                     return [...attributes].sort((a, b) => getSortOrder(a.shortName) - getSortOrder(b.shortName));
                 };
 
-                let subjectContent = sortAttributes(csr.subject.attributes).map(attr => `<div class="ml-4"><strong class="font-medium">${attr.shortName || attr.name}</strong> = ${attr.value}</div>`).join('');
+                let subjectContent = sortAttributes(csr.subject.attributes).map(attr => `<div><span class="text-indigo-600 dark:text-indigo-400 font-bold">${attr.shortName || attr.name}</span> = <span class="break-all">${attr.value}</span></div>`).join('');
                 html += createSection('Subject', subjectContent);
 
                 const sigAlg = forge.pki.oids[csr.signatureOid] || csr.signatureOid;
-                html += createSection('Signature Algorithm', `<div class="ml-4">${sigAlg}</div>`);
+                html += createSection('Signature Algorithm', `<div>${sigAlg}</div>`);
 
                 const pubKey = csr.publicKey;
                 let pubAlg = 'Unknown';
@@ -1037,7 +1145,7 @@
                     const curveOid = forge.pki.oids[pubKey.ecparams.curve.oid];
                     pubAlg = `ECDSA (${curveOid || 'Unknown Curve'})`;
                 }
-                html += createSection('Public Key Algorithm', `<div class="ml-4">${pubAlg}</div>`);
+                html += createSection('Public Key Info', `<div>${pubAlg}</div>`);
 
                 let extensionsContent = '';
                 if (csr.attributes) {
@@ -1051,17 +1159,17 @@
                                             let label = 'Other', displayValue = alt.value;
                                             if (alt.type === 2) label = 'DNS';
                                             else if (alt.type === 7) label = 'IP Address';
-                                            extDetails += `<div class="ml-8">- ${label}: ${displayValue}</div>`;
+                                            extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- ${label}: ${displayValue}</div>`;
                                         });
                                         break;
                                     case 'basicConstraints':
-                                        extDetails += `<div class="ml-8">- CA: ${ext.cA ? 'Yes' : 'No'}</div>`;
+                                        extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- CA: ${ext.cA ? 'Yes' : 'No'}</div>`;
                                         break;
                                     default:
-                                        extDetails = `<div class="ml-8 text-gray-500">(OID: ${ext.id})</div>`;
+                                        extDetails = `<div class="ml-4 text-slate-500 dark:text-slate-500 text-xs">(OID: ${ext.id})</div>`;
                                 }
                                 if (extDetails) {
-                                    extensionsContent += `<div class="ml-4 mt-2 font-medium">${ext.name || ext.id}:</div>` + extDetails;
+                                    extensionsContent += `<div class="mb-2"><div class="font-semibold text-slate-700 dark:text-slate-300">${ext.name || ext.id}</div>${extDetails}</div>`;
                                 }
                             });
                         }
@@ -1069,14 +1177,11 @@
                 }
                 if (extensionsContent) html += createSection('Requested Extensions', extensionsContent);
 
+                html += '</div>';
                 output.innerHTML = html;
             } catch (e) {
-                displayError(output, 'Error parsing certificate request: ' + e.message);
+                output.innerHTML = `<div class="p-4 text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800"><strong class="font-bold">Error:</strong> ${e.message}</div>`;
             }
-        }
-
-        function displayError(outputElement, message) {
-            outputElement.innerHTML = `<div class="p-4 text-sm text-red-700 bg-red-100 rounded-md" role="alert"><strong class="font-bold">Error:</strong> ${message}</div>`;
         }
 
         // --- Remove Password Logic ---
@@ -1095,141 +1200,128 @@
         }
 
         function removePassword() {
-            const fileInput = document.getElementById('pemFile');
             const textAreaInput = document.getElementById('pemText').value.trim();
             const passphrase = document.getElementById('passphrase').value;
             const output = document.getElementById('removerOutput');
+            const outputSection = document.getElementById('decryptedOutputSection');
+
             output.textContent = '';
+            outputSection.classList.add('hidden');
 
-            const handlePem = (pem) => {
-                if (!pem) {
-                    output.textContent = '❌ Error: Please provide a PEM key.';
-                    return;
-                }
-                if (!passphrase) {
-                    output.textContent = '❌ Error: Please enter a password.';
-                    return;
-                }
+            if (!textAreaInput) {
+                alert('Please provide a PEM key.');
+                return;
+            }
+            if (!passphrase) {
+                alert('Please enter a password.');
+                return;
+            }
 
-                try {
-                    let unencryptedPem = null;
+            try {
+                let unencryptedPem = null;
 
-                    if (pem.includes('ENCRYPTED PRIVATE KEY')) {
-                        // PKCS#8 encrypted format - supports RSA, ECC, and other key types
-                        const encryptedObj = forge.pki.encryptedPrivateKeyFromPem(pem);
-                        const decryptedAsn1 = forge.pki.decryptPrivateKeyInfo(encryptedObj, passphrase);
-                        if (!decryptedAsn1) throw new Error('Decryption failed. Check passphrase or key format.');
+                if (textAreaInput.includes('ENCRYPTED PRIVATE KEY')) {
+                    // PKCS#8 encrypted format - supports RSA, ECC, and other key types
+                    const encryptedObj = forge.pki.encryptedPrivateKeyFromPem(textAreaInput);
+                    const decryptedAsn1 = forge.pki.decryptPrivateKeyInfo(encryptedObj, passphrase);
+                    if (!decryptedAsn1) throw new Error('Decryption failed. Check password or key format.');
 
-                        // Convert decrypted ASN.1 to DER then to PEM (works for all key types including ECC)
-                        const der = forge.asn1.toDer(decryptedAsn1).getBytes();
-                        const base64 = forge.util.encode64(der);
+                    // Convert decrypted ASN.1 to DER then to PEM (works for all key types including ECC)
+                    const der = forge.asn1.toDer(decryptedAsn1).getBytes();
+                    const base64 = forge.util.encode64(der);
 
-                        // Format as PKCS#8 unencrypted PEM (works for RSA, ECC, etc.)
-                        const lines = base64.match(/.{1,64}/g) || [];
-                        unencryptedPem = '-----BEGIN PRIVATE KEY-----\n' + lines.join('\n') + '\n-----END PRIVATE KEY-----';
+                    // Format as PKCS#8 unencrypted PEM (works for RSA, ECC, etc.)
+                    const lines = base64.match(/.{1,64}/g) || [];
+                    unencryptedPem = '-----BEGIN PRIVATE KEY-----\n' + lines.join('\n') + '\n-----END PRIVATE KEY-----';
 
-                    } else if (pem.includes('RSA PRIVATE KEY')) {
-                        // Traditional RSA encrypted format
-                        const privateKey = forge.pki.decryptRsaPrivateKey(pem, passphrase);
-                        if (!privateKey) throw new Error('Invalid RSA password or corrupted key.');
-                        unencryptedPem = forge.pki.privateKeyToPem(privateKey);
+                } else if (textAreaInput.includes('RSA PRIVATE KEY')) {
+                    // Traditional RSA encrypted format
+                    const privateKey = forge.pki.decryptRsaPrivateKey(textAreaInput, passphrase);
+                    if (!privateKey) throw new Error('Invalid RSA password or corrupted key.');
+                    unencryptedPem = forge.pki.privateKeyToPem(privateKey);
 
-                    } else if (pem.includes('EC PRIVATE KEY')) {
-                        // Traditional OpenSSL encrypted EC key format
-                        // Parse the PEM headers to get encryption info
-                        const lines = pem.split(/\r?\n/);
-                        let dekInfo = null;
-                        let base64Start = 0;
+                } else if (textAreaInput.includes('EC PRIVATE KEY')) {
+                    // Traditional OpenSSL encrypted EC key format
+                    const lines = textAreaInput.split(/\r?\n/);
+                    let dekInfo = null;
+                    let base64Start = 0;
 
-                        for (let i = 0; i < lines.length; i++) {
-                            if (lines[i].startsWith('DEK-Info:')) {
-                                dekInfo = lines[i].substring(9).trim();
-                            }
-                            if (lines[i] === '' && dekInfo) {
-                                base64Start = i + 1;
-                                break;
-                            }
+                    for (let i = 0; i < lines.length; i++) {
+                        if (lines[i].startsWith('DEK-Info:')) {
+                            dekInfo = lines[i].substring(9).trim();
                         }
-
-                        if (!dekInfo) {
-                            throw new Error('This EC key does not appear to be encrypted.');
+                        if (lines[i] === '' && dekInfo) {
+                            base64Start = i + 1;
+                            break;
                         }
-
-                        // Parse DEK-Info (format: "algorithm,IV")
-                        const dekParts = dekInfo.split(',');
-                        const algorithm = dekParts[0];
-                        const iv = forge.util.hexToBytes(dekParts[1]);
-
-                        // Extract base64 body
-                        let base64Body = '';
-                        for (let i = base64Start; i < lines.length; i++) {
-                            if (lines[i].startsWith('-----END')) break;
-                            base64Body += lines[i];
-                        }
-                        const encryptedBytes = forge.util.decode64(base64Body);
-
-                        // Derive key from passphrase using OpenSSL EVP_BytesToKey
-                        const keyIv = forge.pbe.opensslDeriveBytes(passphrase, iv.substring(0, 8),
-                            algorithm.includes('256') ? 32 : (algorithm.includes('192') ? 24 : 16));
-
-                        // Decrypt
-                        let cipher;
-                        if (algorithm.includes('AES')) {
-                            cipher = forge.cipher.createDecipher('AES-CBC', keyIv);
-                        } else if (algorithm.includes('DES-EDE3') || algorithm.includes('DES3')) {
-                            cipher = forge.cipher.createDecipher('3DES-CBC', keyIv);
-                        } else if (algorithm.includes('DES')) {
-                            cipher = forge.cipher.createDecipher('DES-CBC', keyIv.substring(0, 8));
-                        } else {
-                            throw new Error('Unsupported encryption algorithm: ' + algorithm);
-                        }
-
-                        cipher.start({ iv: iv });
-                        cipher.update(forge.util.createBuffer(encryptedBytes));
-                        const success = cipher.finish();
-
-                        if (!success) throw new Error('Decryption failed. Check password.');
-
-                        const decryptedBytes = cipher.output.getBytes();
-                        const base64Out = forge.util.encode64(decryptedBytes);
-                        const outLines = base64Out.match(/.{1,64}/g) || [];
-                        unencryptedPem = '-----BEGIN EC PRIVATE KEY-----\n' + outLines.join('\n') + '\n-----END EC PRIVATE KEY-----';
-
-                    } else {
-                        throw new Error('Unsupported or unencrypted key format provided.');
                     }
 
-                    if (!unencryptedPem) throw new Error('Could not parse or decrypt the private key.');
+                    if (!dekInfo) {
+                        throw new Error('This EC key does not appear to be encrypted.');
+                    }
 
-                    output.textContent = unencryptedPem;
+                    // Parse DEK-Info (format: "algorithm,IV")
+                    const dekParts = dekInfo.split(',');
+                    const algorithm = dekParts[0];
+                    const iv = forge.util.hexToBytes(dekParts[1]);
 
-                    // Show the decrypted output section
-                    document.getElementById('decryptedOutputSection').classList.remove('hidden');
+                    // Extract base64 body
+                    let base64Body = '';
+                    for (let i = base64Start; i < lines.length; i++) {
+                        if (lines[i].startsWith('-----END')) break;
+                        base64Body += lines[i];
+                    }
+                    const encryptedBytes = forge.util.decode64(base64Body);
 
-                    const blob = new Blob([unencryptedPem], { type: 'application/x-pem-file' });
-                    const link = document.createElement('a');
-                    link.href = URL.createObjectURL(blob);
-                    link.download = 'unencrypted_key.pem';
-                    link.className = "inline-block px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition whitespace-nowrap";
-                    link.textContent = 'Download Decrypted Key';
+                    // Derive key from passphrase using OpenSSL EVP_BytesToKey
+                    const keyIv = forge.pbe.opensslDeriveBytes(passphrase, iv.substring(0, 8),
+                        algorithm.includes('256') ? 32 : (algorithm.includes('192') ? 24 : 16));
 
-                    const downloadContainer = document.getElementById('removerDownloadContainer');
-                    downloadContainer.innerHTML = '';
-                    downloadContainer.appendChild(link);
+                    // Decrypt
+                    let cipher;
+                    if (algorithm.includes('AES')) {
+                        cipher = forge.cipher.createDecipher('AES-CBC', keyIv);
+                    } else if (algorithm.includes('DES-EDE3') || algorithm.includes('DES3')) {
+                        cipher = forge.cipher.createDecipher('3DES-CBC', keyIv);
+                    } else if (algorithm.includes('DES')) {
+                        cipher = forge.cipher.createDecipher('DES-CBC', keyIv.substring(0, 8));
+                    } else {
+                        throw new Error('Unsupported encryption algorithm: ' + algorithm);
+                    }
 
-                } catch (err) {
-                    output.textContent = '❌ Error: ' + err.message;
+                    cipher.start({ iv: iv });
+                    cipher.update(forge.util.createBuffer(encryptedBytes));
+                    const success = cipher.finish();
+
+                    if (!success) throw new Error('Decryption failed. Check password.');
+
+                    const decryptedBytes = cipher.output.getBytes();
+                    const base64Out = forge.util.encode64(decryptedBytes);
+                    const outLines = base64Out.match(/.{1,64}/g) || [];
+                    unencryptedPem = '-----BEGIN EC PRIVATE KEY-----\n' + outLines.join('\n') + '\n-----END EC PRIVATE KEY-----';
+
+                } else {
+                    throw new Error('Unsupported or unencrypted key format provided.');
                 }
-            };
 
-            if (textAreaInput.length > 0) {
-                handlePem(textAreaInput);
-            } else if (fileInput.files.length > 0) {
-                const reader = new FileReader();
-                reader.onload = (e) => handlePem(e.target.result);
-                reader.readAsText(fileInput.files[0]);
-            } else {
-                output.textContent = '❌ Error: Please upload a file or paste a PEM key.';
+                if (!unencryptedPem) throw new Error('Could not parse or decrypt the private key.');
+
+                output.textContent = unencryptedPem;
+                outputSection.classList.remove('hidden');
+
+                const blob = new Blob([unencryptedPem], { type: 'application/x-pem-file' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'unencrypted_key.pem';
+                link.className = "inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-md shadow-sm transition-colors";
+                link.innerHTML = `<svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Download Key`;
+
+                const downloadContainer = document.getElementById('removerDownloadContainer');
+                downloadContainer.innerHTML = '';
+                downloadContainer.appendChild(link);
+
+            } catch (err) {
+                alert('Error: ' + err.message);
             }
         }
 
@@ -1238,18 +1330,16 @@
             setupCertificateChainVerifier();
             setupRemovePasswordEnterKey();
 
+            // Tab init
             const urlParams = new URLSearchParams(window.location.search);
-            const hostname = urlParams.get('hostname');
-            const port = urlParams.get('port');
-
-            if (hostname) {
+            if (urlParams.get('hostname')) {
+                const hostname = urlParams.get('hostname');
+                const port = urlParams.get('port');
                 switchTab('cert_chain');
-                const hostnameInput = document.getElementById('hostname-input');
-                const portInput = document.getElementById('port-input');
-                hostnameInput.value = hostname;
-                if (port) {
-                    portInput.value = port;
-                }
+                document.getElementById('hostname-input').value = hostname;
+                if (port) document.getElementById('port-input').value = port;
+
+                // Auto-submit if hostname present
                 const verifyForm = document.getElementById('verify-form');
                 if (verifyForm) {
                     const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
@@ -1257,7 +1347,6 @@
                 }
             }
         });
-
     </script>
 </body>
 
