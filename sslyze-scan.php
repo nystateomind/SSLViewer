@@ -81,7 +81,8 @@ try {
 
     // Sanitize hostname input
     $hostname = isset($input['hostname']) ? trim($input['hostname']) : '';
-    // Remove protocol prefixes and anything with *// pattern (e.g., https://, http://, *//, etc.)
+    // Remove leading non-hostname characters (bullets, spaces, dashes, etc.)
+    $hostname = preg_replace('/^[^a-zA-Z0-9]+/', '', $hostname);
     $hostname = preg_replace('/^.*\/\//', '', $hostname);
     $hostname = preg_replace('/[\/?#].*$/', '', $hostname);
     $hostname = preg_replace('/:\d+$/', '', $hostname);

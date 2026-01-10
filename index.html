@@ -446,6 +446,7 @@
 
                 // Sanitize and update hostname input
                 let hostname = hostnameInput.value.trim();
+                hostname = hostname.replace(/^[^a-zA-Z0-9]+/, ''); // Remove leading bullets, spaces, dashes, etc.
                 hostname = hostname.replace(/^.*\/\//, ''); // Remove anything with *// pattern (protocols, etc.)
                 hostname = hostname.replace(/[\/?#].*$/, ''); // Remove path/query/fragment
                 hostname = hostname.replace(/:\d+$/, ''); // Remove port if included
