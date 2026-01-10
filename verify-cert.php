@@ -161,13 +161,23 @@ try {
 
         fclose($pipes[0]);
 
+        // Set timeout for streams to prevent hanging (10 seconds)
+        stream_set_timeout($pipes[1], 10);
+        stream_set_timeout($pipes[2], 10);
+
         $output = stream_get_contents($pipes[1]);
+        $streamInfo = stream_get_meta_data($pipes[1]);
         fclose($pipes[1]);
 
         $error_output = stream_get_contents($pipes[2]);
         fclose($pipes[2]);
 
         proc_close($process);
+
+        // Check if timeout occurred
+        if ($streamInfo['timed_out']) {
+            throw new Exception("Connection timed out while performing STARTTLS.", 500);
+        }
 
         if (empty($output) && !empty($error_output)) {
             throw new Exception("OpenSSL command failed.", 500);
@@ -191,7 +201,7 @@ try {
         curl_setopt($ch, CURLOPT_URL, "https://{$hostname}:{$port}");
         curl_setopt($ch, CURLOPT_PORT, $port);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         curl_setopt($ch, CURLOPT_CERTINFO, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false); // Don't follow redirects - capture initial response headers
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
@@ -224,7 +234,7 @@ try {
 
         // Generic detection using combined regex patterns (only if enterprise didn't match)
         if ($cdnDetected === null) {
-            // CDN/WAF detection patterns (combined for performance)
+            // CDN/WAF detection patterns
             $cdnPatterns = [
                 'Akamai' => '/^(X-Akamai-|Akamai-|X-True-Cache-Key:|X-Cache:.*(?:akamaitechnologies\.com|AkamaiGHost))/mi',
                 'Cloudflare' => '/^(CF-RAY:|CF-Cache-Status:|Server:\s*cloudflare)/mi',
