@@ -375,6 +375,15 @@ try {
             ) {
                 $cdnDetected = 'Microsoft IIS';
             }
+            // Apache Tomcat / Java Servlet detection
+            elseif (
+                preg_match('/^Server:\s*Apache-Coyote/mi', $headers) ||
+                preg_match('/^Server:\s*Apache Tomcat/mi', $headers) ||
+                preg_match('/^X-Powered-By:\s*(Servlet|JSP)/mi', $headers) ||
+                preg_match('/^Set-Cookie:\s*JSESSIONID=/mi', $headers)
+            ) {
+                $cdnDetected = 'Apache Tomcat';
+            }
         } // End of generic detection (if $cdnDetected === null)
 
         // If CDN/LB detected but no/generic Server header, use detected name
