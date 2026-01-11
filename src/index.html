@@ -14,25 +14,7 @@
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-                        mono: ['"JetBrains Mono"', 'monospace'],
-                    },
-                    colors: {
-                        slate: {
-                            850: '#151e2e', // Custom deeper slate for cards
-                        }
-                    }
-                }
-            }
-        }
-    </script>
+    <link href="./output.css" rel="stylesheet">
     <style>
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
@@ -245,7 +227,7 @@
 
                     <div class="relative group">
                         <textarea id="certInput"
-                            class="w-full h-64 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm form-input transition text-xs leading-relaxed text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
+                            class="w-full h-64 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm form-input transition text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
                             placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"></textarea>
 
                         <button
@@ -310,7 +292,7 @@
                     <div class="space-y-4">
                         <div class="relative group">
                             <textarea id="pemText"
-                                class="w-full h-48 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm form-input transition text-xs leading-relaxed text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
+                                class="w-full h-48 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm form-input transition text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
                                 placeholder="-----BEGIN ENCRYPTED PRIVATE KEY-----&#10;...&#10;-----END ENCRYPTED PRIVATE KEY-----"></textarea>
                             <button
                                 onclick="document.getElementById('pemText').value = ''; document.getElementById('pemText').focus();"
@@ -619,13 +601,22 @@
                 if (e) e.preventDefault();
                 resultsContainer.innerHTML = '';
                 sslyzeResultsContainer.innerHTML = '';
-                setLoading(true);
 
                 let hostname = hostnameInput.value.trim();
+
+                // Validate empty hostname
+                if (!hostname) {
+                    renderError('Please enter a hostname.');
+                    return;
+                }
+
                 // Check for wildcard hostname before sanitizing (e.g., *.domain.tld)
                 if (/^\s*\*\./.test(hostname)) {
-                    throw new Error('To validate a wildcard certificate, enter a hostname it\'s installed on.');
+                    renderError('To validate a wildcard certificate, enter a hostname it\'s installed on.');
+                    return;
                 }
+
+                setLoading(true);
 
                 hostname = hostname.replace(/^[^a-zA-Z0-9]+/, '').replace(/^.*\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '').trim();
                 hostnameInput.value = hostname;
@@ -785,7 +776,7 @@
                     }
 
                     const serialNumberDecimal = cert.serialNumberHex ? BigInt('0x' + cert.serialNumberHex.replace(/[^0-9a-fA-F]/g, '')).toString() : 'N/A';
-                    const serialNumberHTML = `<span class="font-mono text-xs">${cert.serialNumberHex}</span> <br> <span class="text-slate-500 text-xs">(Decimal: ${serialNumberDecimal})</span>`;
+                    const serialNumberHTML = `<span class="text-xs">${cert.serialNumberHex}</span> <br> <span class="text-slate-500 text-xs">(Decimal: ${serialNumberDecimal})</span>`;
                     dl.appendChild(createDetailRow('Serial Number', serialNumberHTML));
 
                     const validFromDate = new Date(cert.validFrom);
@@ -1403,10 +1394,10 @@
                     return [...attributes].sort((a, b) => getSortOrder(a.shortName) - getSortOrder(b.shortName));
                 };
 
-                let subjectContent = sortAttributes(cert.subject.attributes).map(attr => `<div><span class="text-indigo-600 dark:text-indigo-400 font-bold">${attr.shortName || attr.name}</span> = <span class="break-all">${attr.value}</span></div>`).join('');
+                let subjectContent = sortAttributes(cert.subject.attributes).map(attr => `<div>${attr.shortName || attr.name} = <span class="break-all">${attr.value}</span></div>`).join('');
                 html += createSection('Subject', subjectContent);
 
-                let issuerContent = sortAttributes(cert.issuer.attributes).map(attr => `<div><span class="text-slate-500">${attr.shortName || attr.name}</span> = <span class="break-all">${attr.value}</span></div>`).join('');
+                let issuerContent = sortAttributes(cert.issuer.attributes).map(attr => `<div>${attr.shortName || attr.name} = <span class="break-all">${attr.value}</span></div>`).join('');
                 html += createSection('Issuer', issuerContent);
 
                 html += createSection('Serial Number', `<div>${cert.serialNumber}</div>`);
@@ -1431,18 +1422,18 @@
                     let extDetails = '';
                     switch (ext.name) {
                         case 'subjectKeyIdentifier':
-                            extDetails = `<div class="ml-4 text-slate-600 dark:text-slate-400">${ext.subjectKeyIdentifier}</div>`;
+                            extDetails = `<div class="ml-4">${ext.subjectKeyIdentifier}</div>`;
                             break;
                         case 'authorityKeyIdentifier':
                             if (ext.keyIdentifier) {
-                                extDetails = `<div class="ml-4 text-slate-600 dark:text-slate-400">${ext.keyIdentifier}</div>`;
+                                extDetails = `<div class="ml-4">${ext.keyIdentifier}</div>`;
                             }
                             break;
                         case 'keyUsage':
                             for (const usage in ext) {
                                 if (ext[usage] === true && usage !== 'name' && usage !== 'critical') {
                                     const friendlyName = usage.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                                    extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- ${friendlyName}</div>`;
+                                    extDetails += `<div class="ml-4">- ${friendlyName}</div>`;
                                 }
                             }
                             break;
@@ -1450,21 +1441,21 @@
                             const knownUsages = { serverAuth: 'Server Authentication', clientAuth: 'Client Authentication', codeSigning: 'Code Signing', emailProtection: 'Email Protection', timeStamping: 'Timestamping' };
                             for (const usage in knownUsages) {
                                 if (ext[usage] === true) {
-                                    extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- ${knownUsages[usage]}</div>`;
+                                    extDetails += `<div class="ml-4">- ${knownUsages[usage]}</div>`;
                                 }
                             }
                             if (ext.extra) {
                                 ext.extra.forEach(oid => {
                                     const oidName = forge.pki.oids[oid] || oid;
                                     if (!Object.keys(knownUsages).some(key => forge.pki.oids[key] === oid)) {
-                                        extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- ${oidName}</div>`;
+                                        extDetails += `<div class="ml-4">- ${oidName}</div>`;
                                     }
                                 });
                             }
                             break;
                         case 'cRLDistributionPoints':
                             if (ext.uris) {
-                                ext.uris.forEach(uri => extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- URI: ${uri}</div>`);
+                                ext.uris.forEach(uri => extDetails += `<div class="ml-4">- URI: ${uri}</div>`);
                             }
                             break;
                         case 'authorityInfoAccess':
@@ -1475,9 +1466,9 @@
                                 for (const ad of aia.value) {
                                     const adOid = forge.asn1.derToOid(ad.value[0].value);
                                     if (adOid === ocspOid) {
-                                        extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- OCSP URI: ${ad.value[1].value}</div>`;
+                                        extDetails += `<div class="ml-4">- OCSP URI: ${ad.value[1].value}</div>`;
                                     } else if (adOid === caIssuersOid) {
-                                        extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- CA Issuers URI: ${ad.value[1].value}</div>`;
+                                        extDetails += `<div class="ml-4">- CA Issuers URI: ${ad.value[1].value}</div>`;
                                     }
                                 }
                             } catch (e) { /* ignore parsing errors */ }
@@ -1487,17 +1478,17 @@
                                 let label = 'Other', displayValue = alt.value;
                                 if (alt.type === 2) label = 'DNS';
                                 else if (alt.type === 7) label = 'IP Address';
-                                extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- ${label}: ${displayValue}</div>`;
+                                extDetails += `<div class="ml-4">- ${label}: ${displayValue}</div>`;
                             });
                             break;
                         case 'basicConstraints':
-                            extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- CA: ${ext.cA ? 'Yes' : 'No'}</div>`;
+                            extDetails += `<div class="ml-4">- CA: ${ext.cA ? 'Yes' : 'No'}</div>`;
                             break;
                         default:
-                            extDetails = `<div class="ml-4 text-slate-500 dark:text-slate-500 text-xs">(OID: ${ext.id})</div>`;
+                            extDetails = `<div class="ml-4 text-xs opacity-60">(OID: ${ext.id})</div>`;
                     }
                     if (extDetails) {
-                        extensionsContent += `<div class="mb-2"><div class="font-semibold text-slate-700 dark:text-slate-300">${ext.name || ext.id}</div>${extDetails}</div>`;
+                        extensionsContent += `<div class="mb-2"><div>${ext.name || ext.id}</div>${extDetails}</div>`;
                     }
                 });
                 if (extensionsContent) html += createSection('Extensions', extensionsContent);
@@ -1558,13 +1549,13 @@
 
             // Subject
             let subjectContent = sortAttributes(cert.subject).map(attr =>
-                `<div><span class="text-indigo-600 dark:text-indigo-400 font-bold">${attr.shortName}</span> = <span class="break-all">${attr.value}</span></div>`
+                `<div>${attr.shortName} = <span class="break-all">${attr.value}</span></div>`
             ).join('');
             html += createSection('Subject', subjectContent);
 
             // Issuer
             let issuerContent = sortAttributes(cert.issuer).map(attr =>
-                `<div><span class="text-slate-500">${attr.shortName}</span> = <span class="break-all">${attr.value}</span></div>`
+                `<div>${attr.shortName} = <span class="break-all">${attr.value}</span></div>`
             ).join('');
             html += createSection('Issuer', issuerContent);
 
@@ -1594,11 +1585,11 @@
                 cert.extensions.forEach(ext => {
                     let extDetails = '';
                     if (ext.details && ext.details.length > 0) {
-                        extDetails = ext.details.map(d => `<div class="ml-4 text-slate-600 dark:text-slate-400">- ${d}</div>`).join('');
+                        extDetails = ext.details.map(d => `<div class="ml-4">- ${d}</div>`).join('');
                     } else {
-                        extDetails = `<div class="ml-4 text-slate-500 dark:text-slate-500 text-xs">(OID: ${ext.oid})</div>`;
+                        extDetails = `<div class="ml-4 text-xs opacity-60">(OID: ${ext.oid})</div>`;
                     }
-                    extensionsContent += `<div class="mb-2"><div class="font-semibold text-slate-700 dark:text-slate-300">${ext.name}</div>${extDetails}</div>`;
+                    extensionsContent += `<div class="mb-2"><div>${ext.name}</div>${extDetails}</div>`;
                 });
                 html += createSection('Extensions', extensionsContent);
             }
@@ -1633,7 +1624,7 @@
                     return [...attributes].sort((a, b) => getSortOrder(a.shortName) - getSortOrder(b.shortName));
                 };
 
-                let subjectContent = sortAttributes(csr.subject.attributes).map(attr => `<div><span class="text-indigo-600 dark:text-indigo-400 font-bold">${attr.shortName || attr.name}</span> = <span class="break-all">${attr.value}</span></div>`).join('');
+                let subjectContent = sortAttributes(csr.subject.attributes).map(attr => `<div>${attr.shortName || attr.name} = <span class="break-all">${attr.value}</span></div>`).join('');
                 html += createSection('Subject', subjectContent);
 
                 const sigAlg = forge.pki.oids[csr.signatureOid] || csr.signatureOid;
@@ -1661,17 +1652,17 @@
                                             let label = 'Other', displayValue = alt.value;
                                             if (alt.type === 2) label = 'DNS';
                                             else if (alt.type === 7) label = 'IP Address';
-                                            extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- ${label}: ${displayValue}</div>`;
+                                            extDetails += `<div class="ml-4">- ${label}: ${displayValue}</div>`;
                                         });
                                         break;
                                     case 'basicConstraints':
-                                        extDetails += `<div class="ml-4 text-slate-600 dark:text-slate-400">- CA: ${ext.cA ? 'Yes' : 'No'}</div>`;
+                                        extDetails += `<div class="ml-4">- CA: ${ext.cA ? 'Yes' : 'No'}</div>`;
                                         break;
                                     default:
-                                        extDetails = `<div class="ml-4 text-slate-500 dark:text-slate-500 text-xs">(OID: ${ext.id})</div>`;
+                                        extDetails = `<div class="ml-4 text-xs opacity-60">(OID: ${ext.id})</div>`;
                                 }
                                 if (extDetails) {
-                                    extensionsContent += `<div class="mb-2"><div class="font-semibold text-slate-700 dark:text-slate-300">${ext.name || ext.id}</div>${extDetails}</div>`;
+                                    extensionsContent += `<div class="mb-2"><div>${ext.name || ext.id}</div>${extDetails}</div>`;
                                 }
                             });
                         }
@@ -1729,7 +1720,7 @@
 
             // Subject
             let subjectContent = sortAttributes(csr.subject).map(attr =>
-                `<div><span class="text-indigo-600 dark:text-indigo-400 font-bold">${attr.shortName}</span> = <span class="break-all">${attr.value}</span></div>`
+                `<div>${attr.shortName} = <span class="break-all">${attr.value}</span></div>`
             ).join('');
             html += createSection('Subject', subjectContent);
 
@@ -1749,11 +1740,11 @@
                 csr.extensions.forEach(ext => {
                     let extDetails = '';
                     if (ext.details && ext.details.length > 0) {
-                        extDetails = ext.details.map(d => `<div class="ml-4 text-slate-600 dark:text-slate-400">- ${d}</div>`).join('');
+                        extDetails = ext.details.map(d => `<div class="ml-4">- ${d}</div>`).join('');
                     } else {
-                        extDetails = `<div class="ml-4 text-slate-500 dark:text-slate-500 text-xs">(OID: ${ext.oid})</div>`;
+                        extDetails = `<div class="ml-4 text-xs opacity-60">(OID: ${ext.oid})</div>`;
                     }
-                    extensionsContent += `<div class="mb-2"><div class="font-semibold text-slate-700 dark:text-slate-300">${ext.name}</div>${extDetails}</div>`;
+                    extensionsContent += `<div class="mb-2"><div>${ext.name}</div>${extDetails}</div>`;
                 });
                 html += createSection('Requested Extensions', extensionsContent);
             }

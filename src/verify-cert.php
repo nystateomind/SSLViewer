@@ -13,7 +13,7 @@ if (file_exists(__DIR__ . '/enterprise-config.php')) {
 }
 
 // Set PHP execution time limit as failsafe (30 seconds max)
-set_time_limit(30);
+set_time_limit(20);
 
 // Set the content type to JSON for all responses
 header("Content-Type: application/json");
@@ -572,7 +572,7 @@ try {
                     // Use curl to download CRL
                     $ch = curl_init($crlUrl);
                     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+                    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
                     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
                     $crlData = curl_exec($ch);
                     $curlError = curl_errno($ch);
