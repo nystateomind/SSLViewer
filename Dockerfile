@@ -34,10 +34,7 @@ RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 WORKDIR /var/www/html
 
 # Copy application files
-COPY index.html .
-COPY verify-cert.php .
-COPY sslyze-scan.php .
-COPY favicon.ico .
+COPY src/ .
 
 # Set proper permissions
 RUN chown -R www-data:www-data /var/www/html \

@@ -36,8 +36,8 @@ function send_error($message, $statusCode = 400)
 function json_error_handler($severity, $message, $file, $line)
 {
     if (error_reporting() & $severity) {
-        // In a production environment, log this instead of outputting file/line
-        send_error("Server Error: A technical issue occurred.", 500);
+        // DEBUG: Show actual error for troubleshooting (remove in production)
+        send_error("Server Error: {$message} in {$file} on line {$line}", 500);
     }
 }
 set_error_handler('json_error_handler');
@@ -318,7 +318,7 @@ try {
                 throw new Exception('Error: ' . curl_error($ch), 500);
             }
         }
-        curl_close($ch);
+        // curl_close() removed - not needed in PHP 8.0+, handles auto-close
 
         if (!empty($certChainInfo)) {
             foreach ($certChainInfo as $certData) {
@@ -576,7 +576,7 @@ try {
                     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
                     $crlData = curl_exec($ch);
                     $curlError = curl_errno($ch);
-                    curl_close($ch);
+                    // curl_close() removed - not needed in PHP 8.0+
 
                     if (!$curlError && $crlData) {
                         file_put_contents($crlFile, $crlData);
