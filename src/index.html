@@ -961,7 +961,7 @@
                 resultsContainer.innerHTML = '';
                 const errorTemplate = document.getElementById('error-template');
                 const errorNode = errorTemplate.content.cloneNode(true);
-                errorNode.querySelector('.error-message').textContent = message;
+                errorNode.querySelector('.error-message').innerHTML = message;
                 resultsContainer.appendChild(errorNode);
             };
 

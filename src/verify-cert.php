@@ -321,7 +321,7 @@ try {
                 // Provide helpful message for timeout errors (CURLE_OPERATION_TIMEDOUT = 28)
                 if ($curlErrno === 28 || stripos($curlError, 'timed out') !== false) {
                     throw new Exception(
-                        "Connection timed out. Verify that an SSL/TLS service is running on {$hostname}:{$port}.",
+                        "Connection timed out. Verify that an SSL/TLS service is running on <strong>{$hostname}:{$port}</strong>.",
                         500
                     );
                 }
@@ -329,7 +329,7 @@ try {
                 // Provide helpful message for connection refused (CURLE_COULDNT_CONNECT = 7)
                 if ($curlErrno === 7 || stripos($curlError, 'refused') !== false) {
                     throw new Exception(
-                        "Connection refused. Verify that a service is running on {$hostname}:{$port}.",
+                        "Connection refused. Verify that a service is running on <strong>{$hostname}:{$port}</strong>.",
                         500
                     );
                 }
