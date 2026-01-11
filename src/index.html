@@ -483,7 +483,60 @@
     </template>
 
     <script>
-        // --- Dark Mode Logic ---
+        // ============================================================================
+        // GLOBAL HELPER FUNCTIONS
+        // ============================================================================
+
+        /**
+         * Creates a styled section block for certificate/CSR output display.
+         * @param {string} title - Section header text
+         * @param {string} content - HTML content for the section body
+         * @returns {string} HTML string for the section, or empty string if no content
+         */
+        function createSection(title, content) {
+            if (!content || content.trim() === '') return '';
+            return `<div class="border-b border-slate-200 dark:border-slate-700 last:border-0">
+                <div class="px-4 py-2 bg-slate-100/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
+                    <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">${title}</h4>
+                </div>
+                <div class="p-4 space-y-1 text-sm text-slate-800 dark:text-slate-300">${content}</div>
+            </div>`;
+        }
+
+        /**
+         * Returns sort priority for DN attribute short names (CN first, C last).
+         * @param {string} shortName - Attribute short name (CN, O, OU, etc.)
+         * @returns {number} Sort priority (lower = higher priority)
+         */
+        function getSortOrder(shortName) {
+            const order = { 'CN': 1, 'OU': 2, 'O': 3, 'L': 4, 'ST': 5, 'C': 99 };
+            return order[shortName] || 50;
+        }
+
+        /**
+         * Sorts DN attributes by conventional order (CN first, country last).
+         * @param {Array} attributes - Array of attribute objects with shortName property
+         * @returns {Array} Sorted copy of the attributes array
+         */
+        function sortAttributes(attributes) {
+            return [...attributes].sort((a, b) => getSortOrder(a.shortName) - getSortOrder(b.shortName));
+        }
+
+        /**
+         * Activates a specific tab by name, updating both content and nav styling.
+         * @param {string} tabName - Tab identifier (cert_chain, decoder, decryption)
+         */
+        function activateTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(button => button.classList.remove('active'));
+            document.getElementById('tab-' + tabName).classList.add('active');
+            const targetButton = document.querySelector(`a[href="#${tabName}"]`);
+            if (targetButton) targetButton.classList.add('active');
+        }
+
+        // ============================================================================
+        // DARK MODE LOGIC
+        // ============================================================================
         const themeToggleBtn = document.getElementById('theme-toggle');
         const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
         const themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
@@ -502,80 +555,57 @@
             themeToggleDarkIcon.classList.toggle('hidden');
             themeToggleLightIcon.classList.toggle('hidden');
 
-            // If is set in local storage
-            if (localStorage.getItem('color-theme')) {
-                if (localStorage.getItem('color-theme') === 'light') {
-                    document.documentElement.classList.add('dark');
-                    localStorage.setItem('color-theme', 'dark');
-                } else {
-                    document.documentElement.classList.remove('dark');
-                    localStorage.setItem('color-theme', 'light');
-                }
-            } else {
-                // If not set locally
-                if (document.documentElement.classList.contains('dark')) {
-                    document.documentElement.classList.remove('dark');
-                    localStorage.setItem('color-theme', 'light');
-                } else {
-                    document.documentElement.classList.add('dark');
-                    localStorage.setItem('color-theme', 'dark');
-                }
-            }
+            // Toggle dark class and persist preference
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('color-theme', isDark ? 'dark' : 'light');
         });
 
-        // --- Tab Switching Logic with URL Hash Routing ---
+        // ============================================================================
+        // TAB SWITCHING LOGIC WITH URL HASH ROUTING
+        // ============================================================================
+
+        /**
+         * Switches to a tab and updates the URL hash.
+         * @param {string} tabName - Tab identifier
+         * @param {Event} event - Click event (optional)
+         */
         function switchTab(tabName, event) {
-            if (event) {
-                event.preventDefault();
-            }
+            if (event) event.preventDefault();
 
             // Update URL hash - don't add hash for default tab (cert_chain)
-            let newUrl;
-            if (tabName === 'cert_chain') {
-                newUrl = window.location.search || window.location.pathname;
-            } else {
-                newUrl = window.location.pathname + '#' + tabName;
-            }
+            const newUrl = tabName === 'cert_chain'
+                ? (window.location.search || window.location.pathname)
+                : window.location.pathname + '#' + tabName;
             history.replaceState(null, '', newUrl);
 
-            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.tab-button').forEach(button => button.classList.remove('active'));
-
-            document.getElementById('tab-' + tabName).classList.add('active');
-            const targetButton = document.querySelector(`a[href="#${tabName}"]`);
-            if (targetButton) {
-                targetButton.classList.add('active');
-            }
+            activateTab(tabName);
         }
 
-        // Handle hash on page load and hash changes
+        /**
+         * Handles URL hash changes and activates the corresponding tab.
+         */
         function handleHashChange() {
             let hash = window.location.hash.replace('#', '');
             const validTabs = ['cert_chain', 'decoder', 'decryption'];
 
+            // Default to cert_chain if hostname param present
             if (!hash && window.location.search) {
                 const params = new URLSearchParams(window.location.search);
-                if (params.get('hostname')) {
-                    hash = 'cert_chain';
-                }
+                if (params.get('hostname')) hash = 'cert_chain';
             }
 
             if (hash && validTabs.includes(hash)) {
-                document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-                document.querySelectorAll('.tab-button').forEach(button => button.classList.remove('active'));
-                document.getElementById('tab-' + hash).classList.add('active');
-                const targetButton = document.querySelector(`a[href="#${hash}"]`);
-                if (targetButton) {
-                    targetButton.classList.add('active');
-                }
+                activateTab(hash);
             }
         }
 
+        /**
+         * Toggles visibility of cipher list in SSLyze results.
+         * @param {string} id - Element ID to toggle
+         */
         function toggleCipherList(id) {
             const el = document.getElementById(id);
-            if (el) {
-                el.classList.toggle('hidden');
-            }
+            if (el) el.classList.toggle('hidden');
         }
 
         window.addEventListener('hashchange', handleHashChange);
@@ -583,7 +613,14 @@
             handleHashChange();
         });
 
-        // --- Certificate Chain Logic ---
+        // ============================================================================
+        // CERTIFICATE CHAIN VERIFIER (Tab 1)
+        // ============================================================================
+
+        /**
+         * Sets up the certificate chain verification form and handlers.
+         * Handles remote SSL/TLS connection, certificate parsing, and SSLyze scans.
+         */
         function setupCertificateChainVerifier() {
             const form = document.getElementById('verify-form');
             if (!form) return;
@@ -945,7 +982,14 @@
             form.addEventListener('submit', handleVerify);
         }
 
-        // --- ASN.1 OID Mappings for EC Curves and Algorithms ---
+        // ============================================================================
+        // ASN.1 OID MAPPINGS AND PARSING UTILITIES
+        // ============================================================================
+
+        /**
+         * Mappings for common ASN.1 OIDs (EC curves, signature algorithms, DN attributes, extensions).
+         * Used by the ASN.1 fallback parsers for EC certificates and CSRs.
+         */
         const OID_MAP = {
             // EC Curves
             '1.2.840.10045.3.1.7': 'P-256 (prime256v1)',
@@ -1347,7 +1391,14 @@
             };
         }
 
-        // --- PEM Decoder Logic (Enhanced Version) ---
+        // ============================================================================
+        // PEM DECODER (Tab 2)
+        // ============================================================================
+
+        /**
+         * Main entry point for decoding PEM-formatted certificates and CSRs.
+         * Attempts forge.pki parsing first, falls back to raw ASN.1 for EC certs.
+         */
         function decodeCert() {
 
             const output = document.getElementById('decoderOutput');
@@ -1375,25 +1426,7 @@
                 const cert = forge.pki.certificateFromPem(pem);
                 let html = '<div class="bg-slate-50 dark:bg-black rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">';
 
-                const createSection = (title, content) => {
-                    if (!content || content.trim() === '') return '';
-                    return `<div class="border-b border-slate-200 dark:border-slate-700 last:border-0">
-                        <div class="px-4 py-2 bg-slate-100/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
-                            <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">${title}</h4>
-                        </div>
-                        <div class="p-4 space-y-1 text-sm text-slate-800 dark:text-slate-300">${content}</div>
-                    </div>`;
-                };
-
-                const getSortOrder = (shortName) => {
-                    const order = { 'CN': 1, 'OU': 2, 'O': 3, 'L': 4, 'ST': 5, 'C': 99 };
-                    return order[shortName] || 50;
-                };
-
-                const sortAttributes = (attributes) => {
-                    return [...attributes].sort((a, b) => getSortOrder(a.shortName) - getSortOrder(b.shortName));
-                };
-
+                // Use global helper functions: createSection, sortAttributes
                 let subjectContent = sortAttributes(cert.subject.attributes).map(attr => `<div>${attr.shortName || attr.name} = <span class="break-all">${attr.value}</span></div>`).join('');
                 html += createSection('Subject', subjectContent);
 
@@ -1526,25 +1559,7 @@
 
         // Render EC certificate parsed via ASN.1 fallback
         function renderEcCertificate(cert, output) {
-            const createSection = (title, content) => {
-                if (!content || content.trim() === '') return '';
-                return `<div class="border-b border-slate-200 dark:border-slate-700 last:border-0">
-                    <div class="px-4 py-2 bg-slate-100/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
-                        <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">${title}</h4>
-                    </div>
-                    <div class="p-4 space-y-1 text-sm text-slate-800 dark:text-slate-300">${content}</div>
-                </div>`;
-            };
-
-            const getSortOrder = (shortName) => {
-                const order = { 'CN': 1, 'OU': 2, 'O': 3, 'L': 4, 'ST': 5, 'C': 99 };
-                return order[shortName] || 50;
-            };
-
-            const sortAttributes = (attributes) => {
-                return [...attributes].sort((a, b) => getSortOrder(a.shortName) - getSortOrder(b.shortName));
-            };
-
+            // Uses global helper functions: createSection, sortAttributes
             let html = '<div class="bg-slate-50 dark:bg-black rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">';
 
             // Subject
@@ -1605,25 +1620,7 @@
                 const csr = forge.pki.certificationRequestFromPem(pem);
                 let html = '<div class="bg-slate-50 dark:bg-black rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">';
 
-                const createSection = (title, content) => {
-                    if (!content || content.trim() === '') return '';
-                    return `<div class="border-b border-slate-200 dark:border-slate-700 last:border-0">
-                        <div class="px-4 py-2 bg-slate-100/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
-                            <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">${title}</h4>
-                        </div>
-                        <div class="p-4 space-y-1 text-sm text-slate-800 dark:text-slate-300">${content}</div>
-                    </div>`;
-                };
-
-                const getSortOrder = (shortName) => {
-                    const order = { 'CN': 1, 'OU': 2, 'O': 3, 'L': 4, 'ST': 5, 'C': 99 };
-                    return order[shortName] || 50;
-                };
-
-                const sortAttributes = (attributes) => {
-                    return [...attributes].sort((a, b) => getSortOrder(a.shortName) - getSortOrder(b.shortName));
-                };
-
+                // Uses global helper functions: createSection, sortAttributes
                 let subjectContent = sortAttributes(csr.subject.attributes).map(attr => `<div>${attr.shortName || attr.name} = <span class="break-all">${attr.value}</span></div>`).join('');
                 html += createSection('Subject', subjectContent);
 
@@ -1697,25 +1694,7 @@
 
         // Render EC CSR parsed via ASN.1 fallback
         function renderEcCsr(csr, output) {
-            const createSection = (title, content) => {
-                if (!content || content.trim() === '') return '';
-                return `<div class="border-b border-slate-200 dark:border-slate-700 last:border-0">
-                    <div class="px-4 py-2 bg-slate-100/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
-                        <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">${title}</h4>
-                    </div>
-                    <div class="p-4 space-y-1 text-sm text-slate-800 dark:text-slate-300">${content}</div>
-                </div>`;
-            };
-
-            const getSortOrder = (shortName) => {
-                const order = { 'CN': 1, 'OU': 2, 'O': 3, 'L': 4, 'ST': 5, 'C': 99 };
-                return order[shortName] || 50;
-            };
-
-            const sortAttributes = (attributes) => {
-                return [...attributes].sort((a, b) => getSortOrder(a.shortName) - getSortOrder(b.shortName));
-            };
-
+            // Uses global helper functions: createSection, sortAttributes
             let html = '<div class="bg-slate-50 dark:bg-black rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">';
 
             // Subject
@@ -1754,7 +1733,13 @@
         }
 
 
-        // --- Remove Password Logic ---
+        // ============================================================================
+        // KEY DECRYPTION (Tab 3)
+        // ============================================================================
+
+        /**
+         * Sets up Enter key handler for password field.
+         */
         function setupRemovePasswordEnterKey() {
             const passphraseInput = document.getElementById('passphrase');
             const removeButton = document.getElementById('remove-password-button');
@@ -1769,6 +1754,10 @@
             }
         }
 
+        /**
+         * Decrypts an encrypted private key (PKCS#8, RSA, or EC format).
+         * Supports AES, 3DES, and DES encryption algorithms.
+         */
         function removePassword() {
             const textAreaInput = document.getElementById('pemText').value.trim();
             const passphrase = document.getElementById('passphrase').value;

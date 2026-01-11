@@ -315,7 +315,26 @@ try {
 
         if (curl_errno($ch)) {
             if (empty($certChainInfo)) {
-                throw new Exception('Error: ' . curl_error($ch), 500);
+                $curlError = curl_error($ch);
+                $curlErrno = curl_errno($ch);
+
+                // Provide helpful message for timeout errors (CURLE_OPERATION_TIMEDOUT = 28)
+                if ($curlErrno === 28 || stripos($curlError, 'timed out') !== false) {
+                    throw new Exception(
+                        "Connection timed out. Verify that an SSL/TLS service is running on {$hostname}:{$port}.",
+                        500
+                    );
+                }
+
+                // Provide helpful message for connection refused (CURLE_COULDNT_CONNECT = 7)
+                if ($curlErrno === 7 || stripos($curlError, 'refused') !== false) {
+                    throw new Exception(
+                        "Connection refused. Verify that a service is running on {$hostname}:{$port}.",
+                        500
+                    );
+                }
+
+                throw new Exception('Connection error: ' . $curlError, 500);
             }
         }
         // curl_close() removed - not needed in PHP 8.0+, handles auto-close
