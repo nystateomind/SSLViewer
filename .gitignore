@@ -1,10 +1,4 @@
-# Test files
-tests/
-.pytest_cache/
-
-# IDE and editor files
-.vscode/
-.idea/
+# Editor files
 *.swp
 *.swo
 *~
@@ -16,5 +10,3 @@ Thumbs.db
 # Backup files
 *.bak
 *.orig
-index-*.html
-Archive/
