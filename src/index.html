@@ -775,20 +775,27 @@
                         </div>`;
                 } else if (state === 'complete' && data) {
                     // Use overallStatus and summary from backend
+                    const statusIcons = {
+                        'PASS': `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`,
+                        'INFO': `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`,
+                        'WARNING': `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`,
+                        'CRITICAL': `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`
+                    };
                     const statusColors = {
-                        'PASS': { bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-emerald-200 dark:border-emerald-800', text: 'text-emerald-800 dark:text-emerald-200', icon: '✅' },
-                        'INFO': { bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200 dark:border-blue-800', text: 'text-blue-800 dark:text-blue-200', icon: 'ℹ️' },
-                        'WARNING': { bg: 'bg-amber-50 dark:bg-amber-900/20', border: 'border-amber-200 dark:border-amber-800', text: 'text-amber-800 dark:text-amber-200', icon: '⚠️' },
-                        'CRITICAL': { bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200 dark:border-red-800', text: 'text-red-800 dark:text-red-200', icon: '🚨' }
+                        'PASS': { bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-emerald-200 dark:border-emerald-800', text: 'text-emerald-800 dark:text-emerald-300' },
+                        'INFO': { bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200 dark:border-blue-800', text: 'text-blue-800 dark:text-blue-300' },
+                        'WARNING': { bg: 'bg-amber-50 dark:bg-amber-900/20', border: 'border-amber-200 dark:border-amber-800', text: 'text-amber-800 dark:text-amber-300' },
+                        'CRITICAL': { bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200 dark:border-red-800', text: 'text-red-800 dark:text-red-300' }
                     };
                     const statusStyle = statusColors[data.overallStatus] || statusColors['INFO'];
+                    const statusIcon = statusIcons[data.overallStatus] || statusIcons['INFO'];
 
                     banner.innerHTML = `
                         <a href="#sslyze-results-container" onclick="document.getElementById('sslyze-results-container').scrollIntoView({behavior: 'smooth'}); return false;" 
                            class="${statusStyle.bg} ${statusStyle.border} ${statusStyle.text} border p-4 rounded-lg block hover:opacity-90 transition-opacity cursor-pointer">
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center">
-                                    <span class="text-xl mr-3">${statusStyle.icon}</span>
+                                    <span class="mr-3">${statusIcon}</span>
                                     <div>
                                         <h4 class="font-semibold text-sm">Enhanced Scan Complete</h4>
                                         <p class="text-xs opacity-75 mt-0.5">${data.summary || 'Scan complete'} — Click to view details ↓</p>
@@ -973,23 +980,29 @@
                             ? `${proto.protocol} <span class="text-slate-500 dark:text-slate-400 text-xs font-normal">(${labelText})</span>`
                             : proto.protocol;
 
+                        // SVG icons for status
+                        const checkIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+                        const warnIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
+                        const blockIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>`;
+                        const infoIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
+
                         if (proto.supported) {
                             if (proto.deprecated) {
                                 statusClass = 'text-amber-600 dark:text-amber-400';
-                                statusText = '⚠️ Enabled';
+                                statusText = `${warnIcon}Enabled`;
                             } else {
                                 statusClass = 'text-emerald-600 dark:text-emerald-400';
-                                statusText = '✅ Enabled';
+                                statusText = `${checkIcon}Enabled`;
                             }
                         } else {
                             if (proto.deprecated) {
                                 // Deprecated protocol disabled = good
                                 statusClass = 'text-emerald-600 dark:text-emerald-400';
-                                statusText = '🚫 Disabled';
+                                statusText = `${blockIcon}Disabled`;
                             } else {
                                 // Modern protocol disabled = informational, not an error
                                 statusClass = 'text-slate-500 dark:text-slate-400';
-                                statusText = 'ℹ️ Disabled';
+                                statusText = `${infoIcon}Disabled`;
                             }
                         }
                         const cipherCount = proto.cipherCount || 0;
@@ -1028,23 +1041,26 @@
                         // Severity - neutral styling (status PASS/FAIL provides the visual signal)
                         const severityColor = 'text-slate-600 dark:text-slate-400';
 
-                        // Status with severity-aware icons
-                        let statusClass, statusText;
-                        if (check.severity === 'INFO') {
-                            statusClass = 'text-slate-600 dark:text-slate-400';
-                            statusText = 'ℹ️ INFO';
-                        } else if (check.passed) {
+                        // Status with SVG icons
+                        let statusClass, statusIcon, statusLabel;
+                        if (check.passed) {
                             statusClass = 'text-emerald-600 dark:text-emerald-400';
-                            statusText = '✅ PASS';
+                            statusIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+                            statusLabel = 'PASS';
+                        } else if (check.severity === 'INFO') {
+                            statusClass = 'text-slate-600 dark:text-slate-400';
+                            statusIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
+                            statusLabel = 'INFO';
                         } else {
                             statusClass = 'text-red-600 dark:text-red-400';
-                            statusText = '❌ FAIL';
+                            statusIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
+                            statusLabel = 'FAIL';
                         }
 
                         html += `<tr>
                             <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-200">${check.name}</td>
                             <td class="px-4 py-3"><span class="px-2 py-1 rounded-md text-xs font-semibold ${severityColor}">${check.severity}</span></td>
-                            <td class="px-4 py-3 ${statusClass} font-bold">${statusText}</td>
+                            <td class="px-4 py-3 ${statusClass} font-bold">${statusIcon}${statusLabel}</td>
                             <td class="px-4 py-3 text-slate-600 dark:text-slate-400">${check.description}</td>
                         </tr>`;
                     });
