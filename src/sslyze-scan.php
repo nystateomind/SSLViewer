@@ -458,22 +458,23 @@ function formatSslyzeResults($jsonOutput, $hostname, $port)
         $robotResult = $vulnResult['robot_result'] ?? 'UNKNOWN';
         // Possible values: NOT_VULNERABLE_NO_ORACLE, VULNERABLE_WEAK_ORACLE, VULNERABLE_STRONG_ORACLE, 
         // NOT_VULNERABLE_RSA_NOT_SUPPORTED, UNKNOWN_INCONSISTENT_RESULTS
-        $isVulnerable = strpos($robotResult, 'VULNERABLE') !== false;
+        // Check for results that START with VULNERABLE (not just contain it, since NOT_VULNERABLE also contains it)
+        $isVulnerable = strpos($robotResult, 'VULNERABLE_') === 0;
         $isNotApplicable = $robotResult === 'NOT_VULNERABLE_RSA_NOT_SUPPORTED';
-        
+
         if ($isNotApplicable) {
             $securityChecks[] = [
                 'name' => 'ROBOT Attack',
                 'passed' => true,
-                'severity' => 'INFO',
+                'severity' => 'HIGH',
                 'description' => 'Not applicable — server does not support RSA key exchange.'
             ];
         } else {
             $securityChecks[] = [
                 'name' => 'ROBOT Attack',
                 'passed' => !$isVulnerable,
-                'severity' => 'INFO',
-                'description' => $isVulnerable 
+                'severity' => 'HIGH',
+                'description' => $isVulnerable
                     ? "Potential vulnerability detected ({$robotResult}). Impact depends on RSA key exchange usage."
                     : 'Server is not vulnerable to ROBOT attack.'
             ];
@@ -483,8 +484,13 @@ function formatSslyzeResults($jsonOutput, $hostname, $port)
 
     // Weak Cipher Detection - analyze accepted cipher suites
     $weakCiphers = [];
-    $protocols = ['ssl_2_0_cipher_suites', 'ssl_3_0_cipher_suites', 'tls_1_0_cipher_suites', 
-                  'tls_1_1_cipher_suites', 'tls_1_2_cipher_suites'];
+    $protocols = [
+        'ssl_2_0_cipher_suites',
+        'ssl_3_0_cipher_suites',
+        'tls_1_0_cipher_suites',
+        'tls_1_1_cipher_suites',
+        'tls_1_2_cipher_suites'
+    ];
     foreach ($protocols as $protoKey) {
         if (isset($commands[$protoKey]['result']['accepted_cipher_suites'])) {
             foreach ($commands[$protoKey]['result']['accepted_cipher_suites'] as $cipher) {
@@ -498,12 +504,12 @@ function formatSslyzeResults($jsonOutput, $hostname, $port)
     }
     $weakCiphers = array_unique($weakCiphers);
     $hasWeakCiphers = count($weakCiphers) > 0;
-    
+
     $securityChecks[] = [
         'name' => 'Weak Cipher Suites',
         'passed' => !$hasWeakCiphers,
         'severity' => 'HIGH',
-        'description' => $hasWeakCiphers 
+        'description' => $hasWeakCiphers
             ? 'Server supports weak cipher suites: ' . implode(', ', array_slice($weakCiphers, 0, 3)) . (count($weakCiphers) > 3 ? ' (+' . (count($weakCiphers) - 3) . ' more)' : '')
             : 'No weak cipher suites detected.'
     ];
@@ -514,6 +520,17 @@ function formatSslyzeResults($jsonOutput, $hostname, $port)
             'description' => 'Server supports weak cipher suites (RC4, DES, 3DES, NULL, EXPORT, or anonymous).'
         ];
     }
+
+    // Sort security checks by severity (CRITICAL > HIGH > MEDIUM > LOW > INFO), then alphabetically
+    $severityOrder = ['CRITICAL' => 0, 'HIGH' => 1, 'MEDIUM' => 2, 'LOW' => 3, 'INFO' => 4];
+    usort($securityChecks, function ($a, $b) use ($severityOrder) {
+        $severityA = $severityOrder[$a['severity']] ?? 5;
+        $severityB = $severityOrder[$b['severity']] ?? 5;
+        if ($severityA !== $severityB) {
+            return $severityA - $severityB;
+        }
+        return strcmp($a['name'], $b['name']);
+    });
 
     // Add security checks to result
     $result['securityChecks'] = $securityChecks;

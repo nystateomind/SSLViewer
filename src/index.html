@@ -649,7 +649,7 @@
 
                 // Check for wildcard hostname before sanitizing (e.g., *.domain.tld)
                 if (/^\s*\*\./.test(hostname)) {
-                    renderError('To validate a wildcard certificate, enter a hostname it\'s installed on.');
+                    renderError('To validate a wildcard certificate, enter a hostname the certificate is installed on.');
                     return;
                 }
 
