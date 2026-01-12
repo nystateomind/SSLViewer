@@ -151,32 +151,7 @@ try {
         throw new Exception("SSLyze is not installed or not in the system PATH.", 500);
     }
 
-    // Check for connectivity errors BEFORE trying to parse JSON
-    // Only flag as error if it's an actual connection failure, not JSON containing 'error' strings
-    $isConnectionError = false;
-    $errorMsg = '';
-
-    // Check for specific connection failure patterns
-    if (preg_match('/Could not connect|connection failed|Connection.*refused|connection timed out|ConnectionToServerTimedOut|CONNECTIVITY_ERROR/i', $output)) {
-        $isConnectionError = true;
-        $errorMsg = "Could not complete scan. The server may be rate limiting or blocking security scanners.";
-    }
-
-    if ($isConnectionError) {
-        // Return as a valid JSON response with error details
-        send_json([
-            'success' => false,
-            'error' => $errorMsg,
-            'protocolSupport' => [],
-            'securityChecks' => [],
-            'vulnerabilities' => [],
-            'cipherSuites' => [],
-            'summary' => $errorMsg,
-            'overallStatus' => 'ERROR'
-        ]);
-    }
-
-    // Try to parse JSON output
+    // Try to parse JSON output FIRST before checking for errors
     $jsonOutput = null;
 
     // SSLyze outputs JSON, try to extract it
@@ -195,24 +170,72 @@ try {
         }
     }
 
-    if ($jsonOutput === null) {
-        // If JSON parsing failed, return a structured error response
+    // Check for connectivity errors in the PARSED JSON structure, not raw text
+    // This prevents false positives when valid JSON contains error field names
+    if ($jsonOutput !== null) {
+        // Check if scan has connectivity errors in the proper JSON structure
+        $hasConnectivityError = false;
+        if (isset($jsonOutput['server_scan_results']) && !empty($jsonOutput['server_scan_results'])) {
+            $scanResult = $jsonOutput['server_scan_results'][0] ?? null;
+            if ($scanResult) {
+                // Check for connectivity_error_trace or connectivity_status indicating failure
+                if (isset($scanResult['connectivity_error_trace']) && !empty($scanResult['connectivity_error_trace'])) {
+                    $hasConnectivityError = true;
+                }
+                // Check for scan_status indicating an error
+                if (isset($scanResult['scan_status']) && $scanResult['scan_status'] === 'ERROR_NO_CONNECTIVITY') {
+                    $hasConnectivityError = true;
+                }
+            }
+        } elseif (isset($jsonOutput['server_connectivity_errors']) && !empty($jsonOutput['server_connectivity_errors'])) {
+            // Alternative location for connectivity errors
+            $hasConnectivityError = true;
+        }
+
+        if ($hasConnectivityError) {
+            send_json([
+                'success' => false,
+                'error' => "Could not complete scan. The server may be rate limiting or blocking security scanners.",
+                'protocolSupport' => [],
+                'securityChecks' => [],
+                'vulnerabilities' => [],
+                'cipherSuites' => [],
+                'summary' => "Could not complete scan. The server may be rate limiting or blocking security scanners.",
+                'overallStatus' => 'ERROR'
+            ]);
+        }
+
+        // Parse and format the SSLyze results
+        $result = formatSslyzeResults($jsonOutput, $hostname, $port);
+        send_json($result);
+    }
+
+    // If JSON parsing failed, check if it's a connection error in raw output
+    // (only now check raw text since JSON parsing failed)
+    if (preg_match('/Could not connect|connection failed|Connection.*refused|connection timed out|ConnectionToServerTimedOut/i', $output)) {
         send_json([
             'success' => false,
-            'error' => 'Failed to parse SSLyze output',
+            'error' => "Could not complete scan. The server may be rate limiting or blocking security scanners.",
             'protocolSupport' => [],
             'securityChecks' => [],
             'vulnerabilities' => [],
             'cipherSuites' => [],
-            'summary' => 'SSLyze returned non-JSON output',
+            'summary' => "Could not complete scan. The server may be rate limiting or blocking security scanners.",
             'overallStatus' => 'ERROR'
         ]);
-    } else {
-        // Parse and format the SSLyze results
-        $result = formatSslyzeResults($jsonOutput, $hostname, $port);
     }
 
-    send_json($result);
+    // Otherwise return generic JSON parse error
+    send_json([
+        'success' => false,
+        'error' => 'Failed to parse SSLyze output',
+        'protocolSupport' => [],
+        'securityChecks' => [],
+        'vulnerabilities' => [],
+        'cipherSuites' => [],
+        'summary' => 'SSLyze returned non-JSON output',
+        'overallStatus' => 'ERROR'
+    ]);
 
 } catch (Exception $e) {
     send_error($e->getMessage(), is_int($e->getCode()) && $e->getCode() !== 0 ? $e->getCode() : 400);
