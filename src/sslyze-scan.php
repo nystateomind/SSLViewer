@@ -155,30 +155,14 @@ try {
     // Only flag as error if it's an actual connection failure, not JSON containing 'error' strings
     $isConnectionError = false;
     $errorMsg = '';
-    $helpNote = '';
 
     // Check for specific connection failure patterns
-    if (preg_match('/Could not connect|connection failed|Connection.*refused|timed out|CONNECTIVITY_ERROR_NO_CONNECTION/i', $output)) {
+    if (preg_match('/Could not connect|connection failed|Connection.*refused|connection timed out|ConnectionToServerTimedOut|CONNECTIVITY_ERROR/i', $output)) {
         $isConnectionError = true;
-        if (stripos($output, 'Could not connect') !== false || stripos($output, 'CONNECTIVITY_ERROR') !== false) {
-            $errorMsg = "Could not connect to {$hostname}:{$port}";
-            $helpNote = "Verify the hostname and port are correct and the server is accessible.";
-        } elseif (stripos($output, 'timed out') !== false) {
-            $errorMsg = "Connection timed out for {$hostname}:{$port}";
-            $helpNote = "Verify hostname and port are entered correctly and the application is running. The server may be behind a firewall.";
-        } elseif (stripos($output, 'refused') !== false) {
-            $errorMsg = "Connection refused by {$hostname}:{$port}";
-            $helpNote = "The server actively refused the connection. Verify the port number and that the service is running.";
-        } else {
-            $errorMsg = "SSLyze connection failed for {$hostname}:{$port}";
-            $helpNote = "Check network connectivity and verify the target is accessible.";
-        }
+        $errorMsg = "Could not complete scan. The server may be rate limiting or blocking security scanners.";
     }
 
     if ($isConnectionError) {
-        if ($helpNote) {
-            $errorMsg .= " — " . $helpNote;
-        }
         // Return as a valid JSON response with error details
         send_json([
             'success' => false,
