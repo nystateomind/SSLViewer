@@ -396,6 +396,123 @@ function formatSslyzeResults($jsonOutput, $hostname, $port)
                 'description' => 'Server does not support secure renegotiation.'
             ];
         }
+
+        // Client-Initiated Renegotiation check (from same session_renegotiation result)
+        $acceptsClientReneg = isset($vulnResult['accepts_client_renegotiation']) && $vulnResult['accepts_client_renegotiation'];
+        $securityChecks[] = [
+            'name' => 'Client-Initiated Renegotiation',
+            'passed' => !$acceptsClientReneg,
+            'severity' => 'LOW',
+            'description' => $acceptsClientReneg ? 'Server accepts client-initiated renegotiation (potential DoS risk).' : 'Server does not accept client-initiated renegotiation.'
+        ];
+        if ($acceptsClientReneg) {
+            $result['vulnerabilities'][] = [
+                'name' => 'Client-Initiated Renegotiation',
+                'severity' => 'LOW',
+                'description' => 'Server accepts client-initiated renegotiation, which may allow DoS attacks.'
+            ];
+        }
+    }
+
+    // TLS Compression check (CRIME attack)
+    if (isset($commands['tls_compression']['result'])) {
+        $vulnResult = $commands['tls_compression']['result'];
+        $supportsCompression = isset($vulnResult['supports_compression']) && $vulnResult['supports_compression'];
+        $securityChecks[] = [
+            'name' => 'TLS Compression (CRIME)',
+            'passed' => !$supportsCompression,
+            'severity' => 'HIGH',
+            'description' => $supportsCompression ? 'Server supports TLS compression (vulnerable to CRIME attack).' : 'TLS compression is disabled.'
+        ];
+        if ($supportsCompression) {
+            $result['vulnerabilities'][] = [
+                'name' => 'TLS Compression (CRIME)',
+                'severity' => 'HIGH',
+                'description' => 'Server supports TLS compression, making it vulnerable to the CRIME attack.'
+            ];
+        }
+    }
+
+    // Downgrade Prevention (TLS_FALLBACK_SCSV) check
+    if (isset($commands['tls_fallback_scsv']['result'])) {
+        $vulnResult = $commands['tls_fallback_scsv']['result'];
+        $supportsFallback = isset($vulnResult['supports_fallback_scsv']) && $vulnResult['supports_fallback_scsv'];
+        $securityChecks[] = [
+            'name' => 'Downgrade Prevention (TLS_FALLBACK_SCSV)',
+            'passed' => $supportsFallback,
+            'severity' => 'MEDIUM',
+            'description' => $supportsFallback ? 'Server supports TLS_FALLBACK_SCSV to prevent downgrade attacks.' : 'Server does not support TLS_FALLBACK_SCSV.'
+        ];
+        if (!$supportsFallback) {
+            $result['vulnerabilities'][] = [
+                'name' => 'Missing Downgrade Prevention',
+                'severity' => 'MEDIUM',
+                'description' => 'Server does not support TLS_FALLBACK_SCSV, making it potentially vulnerable to downgrade attacks.'
+            ];
+        }
+    }
+
+    // ROBOT Attack check (informational - context dependent)
+    if (isset($commands['robot']['result'])) {
+        $vulnResult = $commands['robot']['result'];
+        $robotResult = $vulnResult['robot_result'] ?? 'UNKNOWN';
+        // Possible values: NOT_VULNERABLE_NO_ORACLE, VULNERABLE_WEAK_ORACLE, VULNERABLE_STRONG_ORACLE, 
+        // NOT_VULNERABLE_RSA_NOT_SUPPORTED, UNKNOWN_INCONSISTENT_RESULTS
+        $isVulnerable = strpos($robotResult, 'VULNERABLE') !== false;
+        $isNotApplicable = $robotResult === 'NOT_VULNERABLE_RSA_NOT_SUPPORTED';
+        
+        if ($isNotApplicable) {
+            $securityChecks[] = [
+                'name' => 'ROBOT Attack',
+                'passed' => true,
+                'severity' => 'INFO',
+                'description' => 'Not applicable — server does not support RSA key exchange.'
+            ];
+        } else {
+            $securityChecks[] = [
+                'name' => 'ROBOT Attack',
+                'passed' => !$isVulnerable,
+                'severity' => 'INFO',
+                'description' => $isVulnerable 
+                    ? "Potential vulnerability detected ({$robotResult}). Impact depends on RSA key exchange usage."
+                    : 'Server is not vulnerable to ROBOT attack.'
+            ];
+        }
+        // Note: We don't add to vulnerabilities array since this is informational
+    }
+
+    // Weak Cipher Detection - analyze accepted cipher suites
+    $weakCiphers = [];
+    $protocols = ['ssl_2_0_cipher_suites', 'ssl_3_0_cipher_suites', 'tls_1_0_cipher_suites', 
+                  'tls_1_1_cipher_suites', 'tls_1_2_cipher_suites'];
+    foreach ($protocols as $protoKey) {
+        if (isset($commands[$protoKey]['result']['accepted_cipher_suites'])) {
+            foreach ($commands[$protoKey]['result']['accepted_cipher_suites'] as $cipher) {
+                $cipherName = $cipher['cipher_suite']['name'] ?? '';
+                // Check for weak ciphers
+                if (preg_match('/(_RC4_|_DES_|_3DES_|_NULL_|_EXPORT_|_anon_)/i', $cipherName)) {
+                    $weakCiphers[] = $cipherName;
+                }
+            }
+        }
+    }
+    $weakCiphers = array_unique($weakCiphers);
+    $hasWeakCiphers = count($weakCiphers) > 0;
+    
+    $securityChecks[] = [
+        'name' => 'Weak Cipher Suites',
+        'passed' => !$hasWeakCiphers,
+        'severity' => 'HIGH',
+        'description' => $hasWeakCiphers 
+            ? 'Server supports weak cipher suites: ' . implode(', ', array_slice($weakCiphers, 0, 3)) . (count($weakCiphers) > 3 ? ' (+' . (count($weakCiphers) - 3) . ' more)' : '')
+            : 'No weak cipher suites detected.'
+    ];
+    if ($hasWeakCiphers) {
+        $result['vulnerabilities'][] = [
+            'name' => 'Weak Cipher Suites',
+            'severity' => 'HIGH',
+            'description' => 'Server supports weak cipher suites (RC4, DES, 3DES, NULL, EXPORT, or anonymous).'
+        ];
     }
 
     // Add security checks to result

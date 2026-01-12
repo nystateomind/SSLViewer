@@ -25,9 +25,16 @@ A web-based toolkit for analyzing SSL/TLS certificates, decoding PEM files, and 
 - **Processed entirely in-browser** - your keys never leave your device
 
 ### ⚡ Enhanced Vulnerability Scan (Optional)
-- Protocol support detection (TLS 1.0 - 1.3, SSL 2.0/3.0)
+- Protocol support detection (SSL 2.0/3.0, TLS 1.0 - 1.3)
 - Cipher suite enumeration with security ratings
-- Vulnerability checks (Heartbleed, ROBOT, etc.)
+- Security checks:
+  - Heartbleed (CVE-2014-0160)
+  - OpenSSL CCS Injection (CVE-2014-0224)
+  - Secure/Client-Initiated Renegotiation
+  - TLS Compression (CRIME attack)
+  - Downgrade Prevention (TLS_FALLBACK_SCSV)
+  - ROBOT Attack (informational)
+  - Weak Cipher Detection (RC4, DES, 3DES, NULL, EXPORT)
 - Requires [SSLyze](https://github.com/nabla-c0d3/sslyze) on the server
 
 ---
@@ -47,10 +54,10 @@ Open http://localhost:8000 in your browser.
 
 ```bash
 docker build -t sslviewer .
-docker run -p 8080:80 sslviewer
+docker run -p 8000:80 sslviewer
 ```
 
-Open http://localhost:8080 in your browser.
+Open http://localhost:8000 in your browser.
 
 ---
 
@@ -71,11 +78,10 @@ Open http://localhost:8080 in your browser.
 
 | Component | Technology |
 |-----------|------------|
-| Frontend | HTML, JavaScript, Tailwind CSS |
+| Frontend | HTML, JavaScript |
 | Crypto Library | [Forge.js](https://github.com/digitalbazaar/forge) |
 | Backend | PHP 8.x |
 | Vulnerability Scanner | SSLyze |
-| Fonts | Plus Jakarta Sans, JetBrains Mono |
 
 ---
 
@@ -88,9 +94,7 @@ SSLViewer/
 │   ├── verify-cert.php     # Certificate chain retrieval API
 │   ├── sslyze-scan.php     # SSLyze vulnerability scan API
 │   └── output.css          # Compiled Tailwind CSS
-├── tests/                  # Playwright E2E tests
 ├── Dockerfile              # Docker container definition
-└── tailwind.config.js      # Tailwind configuration
 ```
 
 ---
@@ -98,7 +102,7 @@ SSLViewer/
 ## Security Notes
 
 - **Client-side processing**: PEM decoding and key decryption happen entirely in the browser using Forge.js. Private keys are never transmitted to the server.
-- **Server-side connections**: The Chain Viewer connects to remote hosts from the server to retrieve certificates. No credentials are stored or logged.
+- **Server-side connections**: The Chain Viewer connects to remote hosts from the server to retrieve certificates.
 
 ---
 
