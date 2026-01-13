@@ -700,7 +700,7 @@
                     const newUrl = `${window.location.pathname}?hostname=${encodeURIComponent(hostname)}&port=${encodeURIComponent(port)}`;
                     history.replaceState(null, '', newUrl);
 
-                    renderChainStatus(data.chainStatus);
+                    renderChainStatus(data.chainStatus, data.certificates);
                     renderConnectionInfo(data.connectionInfo, hostname);
                     renderServerHeader(data.serverHeader);
                     renderCertificates(data.certificates);
@@ -719,50 +719,127 @@
                 }
             };
 
-            const renderChainStatus = (chainStatus) => {
+            const renderChainStatus = (chainStatus, certificates) => {
                 if (!chainStatus) return;
 
                 const isRevoked = chainStatus.revocationStatus === 'revoked';
                 const isExpired = chainStatus.issues && chainStatus.issues.some(issue => issue.toLowerCase().includes('expired'));
                 const isCritical = isRevoked || isExpired;
+                const isIncomplete = chainStatus.summary && chainStatus.summary.toLowerCase().includes('incomplete');
 
+                // Determine which template to use based on status
+                let templateId, statusMessage;
                 if (chainStatus.isValid && !isCritical) {
-                    const successTemplate = document.getElementById('chain-status-success-template');
-                    if (successTemplate) {
-                        const node = successTemplate.content.cloneNode(true);
-                        node.querySelector('.chain-status-message').textContent = chainStatus.summary;
-                        resultsContainer.appendChild(node);
-                    }
+                    templateId = 'chain-status-success-template';
+                    statusMessage = chainStatus.summary;
                 } else if (isCritical) {
-                    const criticalTemplate = document.getElementById('chain-status-critical-template');
-                    if (criticalTemplate) {
-                        const node = criticalTemplate.content.cloneNode(true);
-                        node.querySelector('.chain-status-message').textContent = chainStatus.summary;
-                        const issuesList = node.querySelector('.chain-status-issues');
-                        if (issuesList && chainStatus.issues) {
-                            chainStatus.issues.forEach(issue => {
-                                const li = document.createElement('li');
-                                li.textContent = issue;
-                                issuesList.appendChild(li);
-                            });
-                        }
-                        resultsContainer.appendChild(node);
-                    }
+                    templateId = 'chain-status-critical-template';
+                    statusMessage = isExpired ? 'Certificate chain contains expired certificate' : chainStatus.summary;
                 } else {
-                    const warningTemplate = document.getElementById('chain-status-warning-template');
-                    if (warningTemplate) {
-                        const node = warningTemplate.content.cloneNode(true);
-                        node.querySelector('.chain-status-message').textContent = chainStatus.summary;
-                        const issuesList = node.querySelector('.chain-status-issues');
-                        if (issuesList && chainStatus.issues) {
-                            chainStatus.issues.forEach(issue => {
-                                const li = document.createElement('li');
-                                li.textContent = issue;
-                                issuesList.appendChild(li);
-                            });
-                        }
-                        resultsContainer.appendChild(node);
+                    templateId = 'chain-status-warning-template';
+                    statusMessage = isIncomplete ? 'Incomplete certificate chain' : chainStatus.summary;
+                }
+
+                // Render status banner
+                const template = document.getElementById(templateId);
+                if (template) {
+                    const node = template.content.cloneNode(true);
+                    node.querySelector('.chain-status-message').textContent = statusMessage;
+
+                    const issuesList = node.querySelector('.chain-status-issues');
+                    if (issuesList && chainStatus.issues) {
+                        const filteredIssues = chainStatus.issues.filter(issue =>
+                            !issue.toLowerCase().includes('expired') &&
+                            !issue.toLowerCase().includes('incomplete') &&
+                            !issue.toLowerCase().includes('missing intermediate')
+                        );
+                        filteredIssues.forEach(issue => {
+                            const li = document.createElement('li');
+                            li.textContent = issue;
+                            issuesList.appendChild(li);
+                        });
                     }
+
+                    resultsContainer.appendChild(node);
+                }
+
+                // Render separate chain card
+                if (certificates && certificates.length > 0) {
+                    const cornerArrowSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 opacity-40"><path d="M9 18l6-6-6-6"/></svg>`;
+
+                    const chainCard = document.createElement('div');
+                    chainCard.className = 'bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg p-4 mb-4 text-sm';
+
+                    let chainHtml = `
+                        <div class="flex items-center font-semibold mb-3 text-slate-700 dark:text-slate-300">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2 flex-shrink-0 text-slate-500">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                            </svg>
+                            Certificate Chain
+                        </div>
+                    `;
+
+                    // Check if chain has a root certificate
+                    const hasRoot = certificates.some(cert =>
+                        cert.type === 'Root Certificate' || cert.type === 'Root'
+                    );
+                    const lastCert = certificates[certificates.length - 1];
+
+                    certificates.forEach((cert, index) => {
+                        const indent = 26 + (index * 20); // 26px base indent to align with header
+                        const isExpiredCert = new Date(cert.validUntil) < new Date();
+                        const expiredDate = isExpiredCert ? new Date(cert.validUntil).toLocaleDateString() : '';
+                        const certId = `cert-${index}`;
+
+                        let colorClass = 'text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400';
+                        let statusText = '';
+                        if (isExpiredCert) {
+                            colorClass = 'text-red-600 dark:text-red-400';
+                            statusText = ` <span class="text-xs">(expired ${expiredDate})</span>`;
+                        }
+
+                        const arrow = index > 0 ? cornerArrowSvg : '';
+                        const typeLabel = cert.type.replace(' Certificate', '');
+
+                        chainHtml += `
+                            <div style="margin-left: ${indent}px" class="flex items-center py-0.5">
+                                ${arrow}<a href="#${certId}" class="${colorClass} transition-colors">${typeLabel}: ${cert.commonName}${statusText}</a>
+                            </div>
+                        `;
+                    });
+
+                    // If chain is incomplete (missing intermediate), show it
+                    if (isIncomplete && certificates.length === 1) {
+                        const leafCert = certificates[0];
+                        const issuerMatch = leafCert.issuer.match(/CN=([^,]+)/);
+                        const issuerCn = issuerMatch ? issuerMatch[1] : leafCert.issuer;
+
+                        chainHtml += `
+                            <div style="margin-left: 46px" class="flex items-center py-0.5 text-amber-600 dark:text-amber-400">
+                                ${cornerArrowSvg}Intermediate: ${issuerCn} <span class="text-xs ml-1">(missing)</span>
+                            </div>
+                        `;
+                    }
+
+                    // If no root in chain, infer from last cert's issuer (cross-signed scenario)
+                    if (!hasRoot && lastCert && lastCert.type !== 'Self-Signed Certificate') {
+                        const issuerMatch = lastCert.issuer.match(/CN=([^,]+)/);
+                        const rootCn = issuerMatch ? issuerMatch[1] : lastCert.issuer;
+                        const lastIndent = 26 + (certificates.length * 20);
+
+                        // Only show inferred root if it's different from the last cert's CN
+                        if (rootCn !== lastCert.commonName) {
+                            chainHtml += `
+                                <div style="margin-left: ${lastIndent}px" class="flex items-center py-0.5 text-slate-400 dark:text-slate-500">
+                                    ${cornerArrowSvg}<span>Root: ${rootCn} <span class="text-xs ml-2">(not sent)</span></span>
+                                </div>
+                            `;
+                        }
+                    }
+
+                    chainCard.innerHTML = chainHtml;
+                    resultsContainer.appendChild(chainCard);
                 }
             };
 
@@ -942,10 +1019,14 @@
                 const container = document.createDocumentFragment();
                 const certCardTemplate = document.getElementById('certificate-card-template');
 
-                certificates.forEach((cert) => {
+                certificates.forEach((cert, index) => {
                     const cardNode = certCardTemplate.content.cloneNode(true);
                     const headerContainer = cardNode.querySelector('.cert-header-container');
                     const dl = cardNode.querySelector('dl');
+                    const card = cardNode.querySelector('.cert-card');
+
+                    // Add ID for anchor linking from chain summary
+                    card.id = `cert-${index}`;
 
                     const isSelfSigned = cert.type === 'Self-Signed Certificate';
                     let certTypeHTML = `<span class="cert-type">${cert.type}</span>`;
@@ -973,7 +1054,6 @@
                     }
 
                     const isLeaf = cert.type === 'Leaf' || isSelfSigned;
-                    const card = cardNode.querySelector('.cert-card');
 
                     if (isLeaf) {
                         card.classList.add('border-indigo-200', 'dark:border-indigo-900', 'ring-1', 'ring-indigo-500/20');
