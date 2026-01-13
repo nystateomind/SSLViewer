@@ -515,7 +515,7 @@ function formatSslyzeResults($jsonOutput, $hostname, $port)
     $securityChecks[] = [
         'name' => 'Weak Cipher Suites',
         'passed' => !$hasWeakCiphers,
-        'severity' => 'HIGH',
+        'severity' => 'MEDIUM',
         'description' => $hasWeakCiphers
             ? 'Server supports weak cipher suites: ' . implode(', ', array_slice($weakCiphers, 0, 3)) . (count($weakCiphers) > 3 ? ' (+' . (count($weakCiphers) - 3) . ' more)' : '')
             : 'No weak cipher suites detected.'
@@ -523,7 +523,7 @@ function formatSslyzeResults($jsonOutput, $hostname, $port)
     if ($hasWeakCiphers) {
         $result['vulnerabilities'][] = [
             'name' => 'Weak Cipher Suites',
-            'severity' => 'HIGH',
+            'severity' => 'MEDIUM',
             'description' => 'Server supports weak cipher suites (RC4, DES, 3DES, NULL, EXPORT, or anonymous).'
         ];
     }
