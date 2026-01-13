@@ -90,6 +90,28 @@ function format_distinguished_name(array $dn)
     return implode(', ', $parts);
 }
 
+/**
+ * Resolves all A and AAAA DNS records for a hostname.
+ * @param string $hostname The hostname to resolve.
+ * @return array Associative array with 'A' and 'AAAA' record arrays.
+ */
+function get_dns_records($hostname)
+{
+    $records = ['A' => [], 'AAAA' => []];
+    $aRecords = @dns_get_record($hostname, DNS_A);
+    $aaaaRecords = @dns_get_record($hostname, DNS_AAAA);
+    if ($aRecords) {
+        foreach ($aRecords as $r) {
+            $records['A'][] = $r['ip'];
+        }
+    }
+    if ($aaaaRecords) {
+        foreach ($aaaaRecords as $r) {
+            $records['AAAA'][] = $r['ipv6'];
+        }
+    }
+    return $records;
+}
 
 // --- Main execution in a try-catch block ---
 try {
@@ -135,6 +157,7 @@ try {
 
     // --- Certificate Retrieval ---
     $rawCerts = [];
+    $connectedIp = null;
 
     // Determine if we need STARTTLS for specific protocols
     $starttlsProtocol = null;
@@ -231,6 +254,11 @@ try {
             throw new Exception("Connected, but could not parse a valid certificate from the output.", 500);
         }
 
+        // Extract connected IP from OpenSSL output (format: "Connecting to X.X.X.X")
+        if (preg_match('/^Connecting to ([0-9a-f.:]+)/mi', $error_output, $ipMatches)) {
+            $connectedIp = $ipMatches[1];
+        }
+
     } else {
         // --- Use cURL for standard HTTPS ---
         if (!function_exists('curl_init')) {
@@ -253,6 +281,7 @@ try {
 
         $response = curl_exec($ch);
         $certChainInfo = curl_getinfo($ch, CURLINFO_CERTINFO);
+        $connectedIp = curl_getinfo($ch, CURLINFO_PRIMARY_IP);
         $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         $headers = substr($response, 0, $headerSize);
 
@@ -486,7 +515,7 @@ try {
     // Check for incomplete chain (only leaf certificate, no intermediate)
     if (count($certificates) === 1 && !$hasSelfSigned) {
         $isIncompleteChain = true;
-        $chainStatus['issues'][] = "Incomplete chain: Missing intermediate certificate(s)";
+        // Note: Summary message is set below based on this flag, no need to add to issues array
     }
 
     // --- OCSP Revocation Check for leaf certificate ---
@@ -668,6 +697,12 @@ try {
     if (isset($serverHeader) && $serverHeader !== null) {
         $responseData['serverHeader'] = $serverHeader;
     }
+
+    // Include connection info (connected IP and DNS records)
+    $responseData['connectionInfo'] = [
+        'connectedIp' => $connectedIp,
+        'dnsRecords' => get_dns_records($hostname)
+    ];
 
     echo json_encode($responseData);
 
