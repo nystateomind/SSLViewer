@@ -734,7 +734,7 @@
                     statusMessage = chainStatus.summary;
                 } else if (isCritical) {
                     templateId = 'chain-status-critical-template';
-                    statusMessage = isExpired ? 'Certificate chain contains expired certificate' : chainStatus.summary;
+                    statusMessage = isExpired ? 'Certificate chain contains expired certificate(s)' : chainStatus.summary;
                 } else {
                     templateId = 'chain-status-warning-template';
                     statusMessage = isIncomplete ? 'Incomplete certificate chain' : chainStatus.summary;
@@ -792,11 +792,19 @@
                         const expiredDate = isExpiredCert ? new Date(cert.validUntil).toLocaleDateString() : '';
                         const certId = `cert-${index}`;
 
-                        let colorClass = 'text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400';
+                        // Color classes based on status
+                        // Link container colors (default state)
+                        let linkClass = 'text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400';
+
+                        // CN specific colors (overrides default if expired)
+                        let cnClass = '';
                         let statusText = '';
+
                         if (isExpiredCert) {
-                            colorClass = 'text-red-600 dark:text-red-400';
-                            statusText = ` <span class="text-xs">(expired ${expiredDate})</span>`;
+                            cnClass = 'text-red-600 dark:text-red-400 font-medium';
+                            statusText = ` <span class="text-xs font-normal text-red-600 dark:text-red-400">(expired ${expiredDate})</span>`;
+                        } else {
+                            cnClass = 'font-medium';
                         }
 
                         const arrow = index > 0 ? cornerArrowSvg : '';
@@ -804,7 +812,7 @@
 
                         chainHtml += `
                             <div style="margin-left: ${indent}px" class="flex items-center py-0.5">
-                                ${arrow}<a href="#${certId}" class="${colorClass} transition-colors">${typeLabel}: ${cert.commonName}${statusText}</a>
+                                ${arrow}<a href="#${certId}" class="${linkClass} transition-colors"><span class="opacity-60">${typeLabel}:</span> <span class="${cnClass}">${cert.commonName}</span>${statusText}</a>
                             </div>
                         `;
                     });
@@ -816,8 +824,8 @@
                         const issuerCn = issuerMatch ? issuerMatch[1] : leafCert.issuer;
 
                         chainHtml += `
-                            <div style="margin-left: 46px" class="flex items-center py-0.5 text-amber-600 dark:text-amber-400">
-                                ${cornerArrowSvg}Intermediate: ${issuerCn} <span class="text-xs ml-1">(missing)</span>
+                            <div style="margin-left: 46px" class="flex items-center py-0.5 text-slate-700 dark:text-slate-300">
+                                ${cornerArrowSvg}<span class="opacity-60">Intermediate:</span> <span class="text-amber-600 dark:text-amber-400 font-medium ml-1">${issuerCn}</span> <span class="text-amber-600 dark:text-amber-400 text-xs ml-1">(missing)</span>
                             </div>
                         `;
                     }
