@@ -825,7 +825,7 @@
 
                         chainHtml += `
                             <div style="margin-left: 46px" class="flex items-center py-0.5 text-slate-700 dark:text-slate-300">
-                                ${cornerArrowSvg}<span class="opacity-60">Intermediate:</span> <span><span class="text-amber-600 dark:text-amber-400 font-medium ml-1">${issuerCn}</span> <span class="text-amber-600 dark:text-amber-400 text-xs ml-2">(missing)</span></span>
+                                ${cornerArrowSvg}<span><span class="opacity-60">Intermediate:</span> <span class="text-amber-600 dark:text-amber-400 font-medium">${issuerCn}</span> <span class="text-amber-600 dark:text-amber-400 text-xs ml-1">(missing)</span></span>
                             </div>
                         `;
                     }
@@ -834,13 +834,17 @@
                     if (!hasRoot && lastCert && lastCert.type !== 'Self-Signed Certificate') {
                         const issuerMatch = lastCert.issuer.match(/CN=([^,]+)/);
                         const rootCn = issuerMatch ? issuerMatch[1] : lastCert.issuer;
-                        const lastIndent = 26 + (certificates.length * 20);
+
+                        // Calculate indent: base 26 + (cert count * 20). 
+                        // If we showed a "missing intermediate" row (isIncomplete=true), we need to add another level of indent.
+                        const extraStep = (isIncomplete && certificates.length === 1) ? 1 : 0;
+                        const lastIndent = 26 + ((certificates.length + extraStep) * 20);
 
                         // Only show inferred root if it's different from the last cert's CN
                         if (rootCn !== lastCert.commonName) {
                             chainHtml += `
                                 <div style="margin-left: ${lastIndent}px" class="flex items-center py-0.5 text-slate-400 dark:text-slate-500">
-                                    ${cornerArrowSvg}<span>Root: ${rootCn} <span class="text-xs ml-2">(not sent)</span></span>
+                                    ${cornerArrowSvg}<span>Root: ${rootCn} <span class="text-xs ml-1">(not sent)</span></span>
                                 </div>
                             `;
                         }
