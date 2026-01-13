@@ -740,11 +740,26 @@
                     statusMessage = isIncomplete ? 'Incomplete certificate chain' : chainStatus.summary;
                 }
 
+                // If in non-success state, suppress the generic "correctly installed" message
+                if (templateId !== 'chain-status-success-template' && statusMessage && statusMessage.includes('correctly installed')) {
+                    statusMessage = '';
+                }
+
                 // Render status banner
                 const template = document.getElementById(templateId);
                 if (template) {
                     const node = template.content.cloneNode(true);
-                    node.querySelector('.chain-status-message').textContent = statusMessage;
+                    const msgEl = node.querySelector('.chain-status-message');
+
+                    if (statusMessage) {
+                        msgEl.textContent = statusMessage;
+                        if (statusMessage.includes('correctly installed')) {
+                            msgEl.classList.add('text-emerald-700', 'dark:text-emerald-400', 'font-medium');
+                            msgEl.classList.remove('opacity-90');
+                        }
+                    } else {
+                        msgEl.style.display = 'none';
+                    }
 
                     const issuesList = node.querySelector('.chain-status-issues');
                     if (issuesList && chainStatus.issues) {
