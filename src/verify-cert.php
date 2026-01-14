@@ -338,7 +338,27 @@ try {
         }
 
         // If CDN/LB detected but no/generic Server header, use detected name
-        if ($cdnDetected && (empty($serverHeader) || in_array(strtolower($serverHeader), ['akamaighost', 'apache', 'nginx', 'microsoft-iis', 'server', 'awselb', 'cloudflare']))) {
+        $genericSignatures = ['akamaighost', 'apache', 'nginx', 'microsoft-iis', 'server', 'awselb', 'cloudflare'];
+        $isGeneric = false;
+
+        if (empty($serverHeader)) {
+            $isGeneric = true;
+        } else {
+            $lowerServer = strtolower($serverHeader);
+            if (in_array($lowerServer, $genericSignatures)) {
+                $isGeneric = true;
+            } else {
+                // Check if it starts with any generic signature (e.g. "apache/2.4")
+                foreach ($genericSignatures as $sig) {
+                    if (strpos($lowerServer, $sig) === 0) {
+                        $isGeneric = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if ($cdnDetected && $isGeneric) {
             $serverHeader = $cdnDetected . ($serverHeader ? ' (' . $serverHeader . ')' : '');
         }
 
