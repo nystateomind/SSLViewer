@@ -1832,7 +1832,8 @@
                             extDetails = `<div class="ml-4 text-xs opacity-60">(OID: ${ext.id})</div>`;
                     }
                     if (extDetails) {
-                        extensionsContent += `<div class="mb-2"><div>${ext.name || ext.id}</div>${extDetails}</div>`;
+                        const criticalBadge = ext.critical ? '<span class="ml-2 text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded">Critical</span>' : '';
+                        extensionsContent += `<div class="mb-2"><div>${ext.name || ext.id}${criticalBadge}</div>${extDetails}</div>`;
                     }
                 });
                 if (extensionsContent) html += createSection('Extensions', extensionsContent);
@@ -1915,7 +1916,8 @@
                     } else {
                         extDetails = `<div class="ml-4 text-xs opacity-60">(OID: ${ext.oid})</div>`;
                     }
-                    extensionsContent += `<div class="mb-2"><div>${ext.name}</div>${extDetails}</div>`;
+                    const criticalBadge = ext.critical ? '<span class="ml-2 text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded">Critical</span>' : '';
+                    extensionsContent += `<div class="mb-2"><div>${ext.name}${criticalBadge}</div>${extDetails}</div>`;
                 });
                 html += createSection('Extensions', extensionsContent);
             }
@@ -1969,8 +1971,9 @@
                                     default:
                                         extDetails = `<div class="ml-4 text-xs opacity-60">(OID: ${ext.id})</div>`;
                                 }
-                                if (extDetails) {
-                                    extensionsContent += `<div class="mb-2"><div>${ext.name || ext.id}</div>${extDetails}</div>`;
+                                const criticalBadge = ext.critical ? '<span class="ml-2 text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded">Critical</span>' : '';
+                                if (extDetails || criticalBadge) {
+                                    extensionsContent += `<div class="mb-2"><div>${ext.name || ext.id}${criticalBadge}</div>${extDetails}</div>`;
                                 }
                             });
                         }
@@ -2034,7 +2037,8 @@
                     } else {
                         extDetails = `<div class="ml-4 text-xs opacity-60">(OID: ${ext.oid})</div>`;
                     }
-                    extensionsContent += `<div class="mb-2"><div>${ext.name}</div>${extDetails}</div>`;
+                    const criticalBadge = ext.critical ? '<span class="ml-2 text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded">Critical</span>' : '';
+                    extensionsContent += `<div class="mb-2"><div>${ext.name}${criticalBadge}</div>${extDetails}</div>`;
                 });
                 html += createSection('Requested Extensions', extensionsContent);
             }

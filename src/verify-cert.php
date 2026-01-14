@@ -308,7 +308,7 @@ try {
                 'Cloudflare' => '/^(CF-RAY:|CF-Cache-Status:|Server:\s*cloudflare)/mi',
                 'Fastly' => '/^(X-Served-By:.*cache|Fastly-|X-Fastly-)/mi',
                 'AWS CloudFront' => '/^(X-Amz-Cf-Id:|X-Amz-Cf-Pop:|Via:.*CloudFront)/mi',
-                'AWS API Gateway' => '/^(x-amz-apigw-id:|x-amzn-requestid:)/mi',
+                'AWS API Gateway' => '/^(x-amz-apigw-id:|x-amzn-requestid:|x-amzn-errortype:|x-amzn-errormessage:)/mi',
                 'Azure CDN' => '/^(X-Azure-Ref:|X-MSEdge-Ref:)/mi',
                 'Google Cloud CDN' => '/^Via:.*google/mi',
                 'Varnish' => '/^X-Varnish:/mi',
@@ -325,7 +325,7 @@ try {
                 'Apache Traffic Server' => '/^(Via:.*ApacheTrafficServer|Server:\s*ATS)/mi',
                 'LiteSpeed' => '/^Server:\s*LiteSpeed/mi',
                 'Kong Gateway' => '/^(Via:.*kong|X-Kong-)/mi',
-                'Microsoft IIS' => '/^(X-Powered-By:\s*ASP\.NET|X-AspNet-Version:|X-AspNetMvc-Version:|Set-Cookie:\s*(?:ASP\.NET_SessionId|ASPSESSIONID))/mi',
+                'Microsoft IIS' => '/^(X-Powered-By:\s*(?:ASP\.NET|ARR)|X-AspNet-Version:|X-AspNetMvc-Version:|Set-Cookie:\s*(?:ASP\.NET_SessionId|ASPSESSIONID)|X-FEServer:|X-BEServer:|X-CalculatedBETarget:|X-SharePointHealthScore:|SPIisLatency:|SPRequestGuid:|X-DiagInfo:|X-MS-InvokeApp:|X-UA-Compatible:)/mi',
                 'Apache Tomcat' => '/^(Server:\s*Apache-Coyote|Server:\s*Apache Tomcat|X-Powered-By:\s*(?:Servlet|JSP)|Set-Cookie:\s*JSESSIONID=)/mi',
             ];
 
@@ -338,7 +338,7 @@ try {
         }
 
         // If CDN/LB detected but no/generic Server header, use detected name
-        if ($cdnDetected && (empty($serverHeader) || in_array(strtolower($serverHeader), ['akamaighost', 'apache', 'nginx', 'microsoft-iis']))) {
+        if ($cdnDetected && (empty($serverHeader) || in_array(strtolower($serverHeader), ['akamaighost', 'apache', 'nginx', 'microsoft-iis', 'server', 'awselb', 'cloudflare']))) {
             $serverHeader = $cdnDetected . ($serverHeader ? ' (' . $serverHeader . ')' : '');
         }
 
