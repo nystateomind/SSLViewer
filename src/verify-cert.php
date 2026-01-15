@@ -287,7 +287,7 @@ try {
 
         // Extract Server header and detect CDN/WAF
         $serverHeader = null;
-        if (preg_match('/^Server:\s*(.+)$/mi', $headers, $matches)) {
+        if (preg_match('/^Server:\h*(.*)$/mi', $headers, $matches)) {
             $serverHeader = trim($matches[1]);
         }
 
