@@ -1717,6 +1717,10 @@
             output.className = 'mt-6'; // Reset
 
             let pem = document.getElementById('certInput').value.trim();
+            // Replace literal "\n" characters with actual newlines to support single-line copy-pastes
+            pem = pem.replace(/\\n/g, '\n');
+            document.getElementById('certInput').value = pem;
+
             if (!pem) {
                 output.innerHTML = `<div class="p-4 text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800" role="alert"><strong class="font-bold">Error:</strong> Please paste a certificate or CSR.</div>`;
                 return;
@@ -1857,6 +1861,10 @@
                 // No CERTIFICATE headers - try as CSR (for raw base64 data)
                 try {
                     let csrPem = document.getElementById('certInput').value.trim();
+                    // Replace literal "\n" characters with actual newlines to support single-line copy-pastes
+                    csrPem = csrPem.replace(/\\n/g, '\n');
+                    document.getElementById('certInput').value = csrPem;
+
                     if (!csrPem.includes('-----BEGIN')) {
                         csrPem = csrPem.replace(/[\r\n\s]/g, '');
                         csrPem = csrPem.match(/.{1,64}/g).join('\n');
