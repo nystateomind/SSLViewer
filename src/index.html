@@ -1981,7 +1981,21 @@
                             extDetails += `<div class="ml-4">- CA: ${ext.cA ? 'Yes' : 'No'}</div>`;
                             break;
                         default:
-                            extDetails = `<div class="ml-4 text-xs opacity-60">(OID: ${ext.id})</div>`;
+                            if (ext.id === '1.3.6.1.4.1.311.21.1') {
+                                ext.name = 'Microsoft Certificate Services CA Version';
+                                try {
+                                    // Value is an INTEGER: Low 16 bits = Cert Index, High 16 bits = Key Index
+                                    const asn1 = forge.asn1.fromDer(ext.value);
+                                    const val = parseInt(forge.util.bytesToHex(asn1.value), 16);
+                                    const keyIndex = val >> 16;
+                                    const certIndex = val & 0xFFFF;
+                                    extDetails = `<div class="ml-4">V${keyIndex}.${certIndex}</div>`;
+                                } catch (e) {
+                                    extDetails = `<div class="ml-4 text-xs opacity-60">(Raw Value)</div>`;
+                                }
+                            } else {
+                                extDetails = `<div class="ml-4 text-xs opacity-60">(OID: ${ext.id})</div>`;
+                            }
                     }
                     if (extDetails) {
                         const criticalBadge = ext.critical ? '<span class="ml-2 text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded">Critical</span>' : '';
