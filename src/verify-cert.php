@@ -417,6 +417,9 @@ try {
         $subjectCnValue = $certInfo['subject']['CN'] ?? 'N/A';
         $subjectCn = is_array($subjectCnValue) ? implode(', ', $subjectCnValue) : $subjectCnValue;
 
+        $subjectOValue = $certInfo['subject']['O'] ?? 'N/A';
+        $subjectO = is_array($subjectOValue) ? implode(', ', $subjectOValue) : $subjectOValue;
+
         $type = $isLeaf ? 'Leaf' : 'Intermediate';
         if ($certInfo['subject'] === $certInfo['issuer']) {
             $type = $isLeaf ? 'Self-Signed Certificate' : 'Root Certificate';
@@ -452,6 +455,7 @@ try {
             'type' => $type,
             'pem' => $pemCert, // Include raw PEM for download
             'commonName' => $subjectCn,
+            'organization' => $subjectO,
             'alternativeNames' => isset($certInfo['extensions']['subjectAltName']) ? array_map('trim', explode(',', str_replace('DNS:', '', $certInfo['extensions']['subjectAltName']))) : [],
             'serialNumberHex' => $certInfo['serialNumberHex'] ?? 'N/A',
             'serialNumberDecimal' => $certInfo['serialNumber'] ?? 'N/A',

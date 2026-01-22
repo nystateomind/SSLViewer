@@ -816,10 +816,24 @@
                         let statusText = '';
 
                         if (isExpiredCert) {
-                            cnClass = 'text-red-600 dark:text-red-400 font-medium';
+                            cnClass = 'font-medium';
                             statusText = ` <span class="text-xs font-normal text-red-600 dark:text-red-400">(expired ${expiredDate})</span>`;
                         } else {
                             cnClass = 'font-medium';
+                        }
+
+                        // Customize status for leaf certificate (index 0) if not expired
+                        if (index === 0 && !isExpiredCert) {
+                            const validUntilDate = new Date(cert.validUntil);
+                            const now = new Date();
+                            const diffTime = validUntilDate - now;
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                            let colorClass = 'text-slate-500 dark:text-slate-400';
+                            if (diffDays < 7) {
+                                colorClass = 'text-amber-600 dark:text-amber-400';
+                            }
+                            statusText = ` <span class="text-xs font-normal ${colorClass}">(Expires in ${diffDays} day${diffDays === 1 ? '' : 's'})</span>`;
                         }
 
                         const arrow = index > 0 ? cornerArrowSvg : '';
@@ -1066,16 +1080,31 @@
                         const url = URL.createObjectURL(blob);
                         const filename = `${(cert.commonName || 'certificate').replace(/[^a-z0-9.-]/gi, '_')}.cer`;
 
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.download = filename;
-                        link.className = 'flex items-center text-lg leading-6 font-medium text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors';
-                        link.innerHTML = `
+                        // Create header container with flex layout
+                        const headerDiv = document.createElement('div');
+                        headerDiv.className = 'flex items-center justify-between flex-wrap gap-2';
+
+                        // Left side: cert icon, type, and CN (not clickable)
+                        const titleSpan = document.createElement('span');
+                        titleSpan.className = 'flex items-center text-lg leading-6 font-medium text-slate-900 dark:text-white';
+                        titleSpan.innerHTML = `
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="cert-icon mr-2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                             ${certTypeHTML}: <span class="cert-common-name ml-2 text-slate-700 dark:text-slate-300 font-normal">${cert.commonName}</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-2 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                         `;
-                        headerContainer.appendChild(link);
+
+                        // Right side: visible download button (icon only)
+                        const downloadLink = document.createElement('a');
+                        downloadLink.href = url;
+                        downloadLink.download = filename;
+                        downloadLink.title = "Download Certificate";
+                        downloadLink.className = 'text-slate-400 hover:text-indigo-600 dark:text-slate-500 dark:hover:text-indigo-400 transition-colors';
+                        downloadLink.innerHTML = `
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        `;
+
+                        headerDiv.appendChild(titleSpan);
+                        headerDiv.appendChild(downloadLink);
+                        headerContainer.appendChild(headerDiv);
                     } else {
                         headerContainer.innerHTML = `<h3 class="text-lg leading-6 font-medium text-slate-900 dark:text-white flex items-center">...</h3>`;
                     }
@@ -1091,6 +1120,9 @@
                     }
 
                     dl.appendChild(createDetailRow('Common Name', cert.commonName));
+                    if (cert.organization && cert.organization !== 'N/A') {
+                        dl.appendChild(createDetailRow('Organization', cert.organization));
+                    }
                     if (isLeaf) {
                         dl.appendChild(createDetailRow('Alternative Names', cert.alternativeNames.length > 0 ? cert.alternativeNames.join(', ') : 'N/A'));
                     }
@@ -1710,6 +1742,114 @@
          * Main entry point for decoding PEM-formatted certificates and CSRs.
          * Attempts forge.pki parsing first, falls back to raw ASN.1 for EC certs.
          */
+        // --- Constants & Helpers ---
+
+        const BYTES_TO_HEX = (bytes) => {
+            let hex = '';
+            // Handle Forge ByteBuffer, raw string, or array
+            const data = bytes.data || bytes;
+            for (let i = 0; i < data.length; i++) {
+                hex += data.charCodeAt(i).toString(16).toLowerCase().padStart(2, '0');
+            }
+            return hex;
+        };
+
+        const POLICY_MAP = {
+            '2.5.29.32.0': 'anyPolicy',
+            '2.23.140.1.2.1': 'Domain Validated',
+            '2.23.140.1.2.2': 'Organization Validated',
+            '2.23.140.1.2.3': 'Individual Validated',
+            '2.23.140.1.1': 'Extended Validation',
+        };
+
+        const KEY_USAGE_NAMES = {
+            digitalSignature: 'Digital Signature',
+            nonRepudiation: 'Non Repudiation',
+            keyEncipherment: 'Key Encipherment',
+            dataEncipherment: 'Data Encipherment',
+            keyAgreement: 'Key Agreement',
+            keyCertSign: 'Certificate Sign',
+            cRLSign: 'CRL Sign',
+            encipherOnly: 'Encipher Only',
+            decipherOnly: 'Decipher Only'
+        };
+
+        const EXT_KEY_USAGE_NAMES = {
+            serverAuth: 'Server Authentication',
+            clientAuth: 'Client Authentication',
+            codeSigning: 'Code Signing',
+            emailProtection: 'Email Protection',
+            timeStamping: 'Timestamping'
+        };
+
+        const getAuthorityKeyIdentifier = (cert) => {
+            const akiOid = '2.5.29.35';
+            const ext = cert.extensions.find(e => e.id === akiOid || e.name === 'authorityKeyIdentifier');
+            if (!ext) return null;
+
+            if (ext.keyIdentifier) {
+                return BYTES_TO_HEX(ext.keyIdentifier);
+            }
+
+            // Fallback: Manual ASN.1 parsing
+            try {
+                const asn1 = forge.asn1.fromDer(ext.value);
+                if (asn1.type === forge.asn1.Type.SEQUENCE) {
+                    for (let i = 0; i < asn1.value.length; i++) {
+                        const item = asn1.value[i];
+                        if (item.tagClass === forge.asn1.Class.CONTEXT_SPECIFIC && item.type === 0) {
+                            return BYTES_TO_HEX(item.value);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to parse AKI manually', e);
+            }
+            return null;
+        };
+
+        const getCertificatePolicies = (ext) => {
+            let details = '';
+            if (!ext.value) return details;
+
+            try {
+                const policies = forge.asn1.fromDer(ext.value);
+                if (policies.type === forge.asn1.Type.SEQUENCE) {
+                    policies.value.forEach((policy) => {
+                        const policyOid = forge.asn1.derToOid(policy.value[0].value);
+                        const displayName = POLICY_MAP[policyOid] || policyOid;
+                        details += `<div class="ml-4">- ${displayName}</div>`;
+
+                        if (policy.value[1] && policy.value[1].type === forge.asn1.Type.SEQUENCE) {
+                            const qualifiers = policy.value[1];
+                            qualifiers.value.forEach(qualifier => {
+                                const qualifierId = forge.asn1.derToOid(qualifier.value[0].value);
+                                // CPS Pointer (1.3.6.1.5.5.7.2.1)
+                                if (qualifierId === '1.3.6.1.5.5.7.2.1') {
+                                    const qualifierValue = qualifier.value[1].value;
+                                    details += `<div class="ml-8 text-xs text-slate-500 dark:text-slate-400">CPS: ${qualifierValue}</div>`;
+                                }
+                                // User Notice (1.3.6.1.5.5.7.2.2)
+                                else if (qualifierId === '1.3.6.1.5.5.7.2.2') {
+                                    try {
+                                        if (qualifier.value[1].value[0] && qualifier.value[1].value[0].value) {
+                                            const userNotice = qualifier.value[1].value[0].value;
+                                            if (typeof userNotice === 'string') {
+                                                details += `<div class="ml-8 text-xs text-slate-500 dark:text-slate-400">User Notice: ${userNotice}</div>`;
+                                            }
+                                        }
+                                    } catch (e) { /* Ignore user notice parsing error */ }
+                                }
+                            });
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error('Failed to parse Certificate Policies', e);
+            }
+            return details;
+        };
+
         function decodeCert() {
 
             const output = document.getElementById('decoderOutput');
@@ -1738,8 +1878,12 @@
             }
 
             try {
+                // Pre-process parsing options for Forge to ensure extensions are fully parsed
                 const cert = forge.pki.certificateFromPem(pem);
+
                 let html = '<div class="bg-slate-50 dark:bg-black rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">';
+
+
 
                 // Use global helper functions: createSection, sortAttributes
                 let subjectContent = sortAttributes(cert.subject.attributes).map(attr => `<div>${attr.shortName || attr.name} = <span class="break-all">${attr.value}</span></div>`).join('');
@@ -1773,29 +1917,30 @@
                             extDetails = `<div class="ml-4">${ext.subjectKeyIdentifier}</div>`;
                             break;
                         case 'authorityKeyIdentifier':
-                            if (ext.keyIdentifier) {
-                                extDetails = `<div class="ml-4">${ext.keyIdentifier}</div>`;
+                            // Use helper to support both Forge-parsed and manual fallback parsing
+                            const akiValue = getAuthorityKeyIdentifier(cert);
+                            if (akiValue) {
+                                extDetails = `<div class="ml-4">Key Identifier: ${akiValue}</div>`;
                             }
                             break;
                         case 'keyUsage':
                             for (const usage in ext) {
                                 if (ext[usage] === true && usage !== 'name' && usage !== 'critical') {
-                                    const friendlyName = usage.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                                    const friendlyName = KEY_USAGE_NAMES[usage] || usage.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                                     extDetails += `<div class="ml-4">- ${friendlyName}</div>`;
                                 }
                             }
                             break;
                         case 'extKeyUsage':
-                            const knownUsages = { serverAuth: 'Server Authentication', clientAuth: 'Client Authentication', codeSigning: 'Code Signing', emailProtection: 'Email Protection', timeStamping: 'Timestamping' };
-                            for (const usage in knownUsages) {
+                            for (const usage in EXT_KEY_USAGE_NAMES) {
                                 if (ext[usage] === true) {
-                                    extDetails += `<div class="ml-4">- ${knownUsages[usage]}</div>`;
+                                    extDetails += `<div class="ml-4">- ${EXT_KEY_USAGE_NAMES[usage]}</div>`;
                                 }
                             }
                             if (ext.extra) {
                                 ext.extra.forEach(oid => {
                                     const oidName = forge.pki.oids[oid] || oid;
-                                    if (!Object.keys(knownUsages).some(key => forge.pki.oids[key] === oid)) {
+                                    if (!Object.keys(EXT_KEY_USAGE_NAMES).some(key => forge.pki.oids[key] === oid)) {
                                         extDetails += `<div class="ml-4">- ${oidName}</div>`;
                                     }
                                 });
@@ -1821,6 +1966,9 @@
                                 }
                             } catch (e) { /* ignore parsing errors */ }
                             break;
+                        case 'certificatePolicies':
+                            extDetails += getCertificatePolicies(ext);
+                            break;
                         case 'subjectAltName':
                             ext.altNames.forEach(alt => {
                                 let label = 'Other', displayValue = alt.value;
@@ -1841,6 +1989,20 @@
                     }
                 });
                 if (extensionsContent) html += createSection('Extensions', extensionsContent);
+
+                // Calculate Fingerprints
+                const der = forge.asn1.toDer(forge.pki.certificateToAsn1(cert)).getBytes();
+                const getFingerprint = (hashFn, bytes) => {
+                    const md = hashFn.create();
+                    md.update(bytes);
+                    return md.digest().toHex();
+                };
+                const sha1Desc = getFingerprint(forge.md.sha1, der);
+                const sha256Desc = getFingerprint(forge.md.sha256, der);
+
+                let thumbprintContent = `<div><span class="font-medium mr-3">SHA-1:</span><span class="break-all opacity-80">${sha1Desc}</span></div>`;
+                thumbprintContent += `<div><span class="font-medium mr-3">SHA-256:</span><span class="break-all opacity-80">${sha256Desc}</span></div>`;
+                html += createSection('Fingerprints', thumbprintContent);
 
                 html += '</div>';
                 output.innerHTML = html;
