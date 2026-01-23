@@ -115,20 +115,15 @@ function get_dns_records($hostname)
 
 /**
  * Checks revocation status of a certificate using OCSP and CRL.
- * @param string $certPem The PEM-encoded certificate to check.
+ * @param string $certPem The PEM-encoded certificate (for temp file creation).
+ * @param array $certInfo The parsed certificate info from openssl_x509_parse().
  * @param string|null $issuerPem The PEM-encoded issuer certificate (required for OCSP).
  * @return string Revocation status: 'good', 'revoked', 'ocsp_error', 'crl_good', 'crl_error', 'no_revocation_info', etc.
  */
-function check_cert_revocation($certPem, $issuerPem = null)
+function check_cert_revocation($certPem, $certInfo, $issuerPem = null)
 {
     $revocationStatus = 'unknown';
 
-    $certResource = openssl_x509_read($certPem);
-    if (!$certResource) {
-        return 'error';
-    }
-
-    $certInfo = openssl_x509_parse($certResource);
     if (!$certInfo) {
         return 'error';
     }
@@ -625,7 +620,6 @@ try {
     $hasSelfSigned = false;
     $isIncompleteChain = false;
     $hostnameInSan = false;
-    $revocationStatus = 'unknown';
 
     foreach ($certificates as $index => $cert) {
         // Check for expired certificates
@@ -644,7 +638,6 @@ try {
 
         // Check if hostname is in SAN (only for leaf certificate)
         if ($index === 0) {
-            $leafCert = $cert;
             // Check CN
             if (strcasecmp($cert['commonName'], $hostname) === 0) {
                 $hostnameInSan = true;
@@ -688,27 +681,25 @@ try {
     $hasRevokedCert = false;
     $overallRevocationStatus = 'unknown';
 
-    foreach ($rawCerts as $index => $certPem) {
-        // Get issuer cert (next in chain) if available
+    // Build a lookup of parsed cert info for each raw cert (to pass to revocation check)
+    $parsedCertInfo = [];
+    foreach ($rawCerts as $idx => $pem) {
+        $res = openssl_x509_read($pem);
+        $parsedCertInfo[$idx] = $res ? openssl_x509_parse($res) : null;
+    }
+
+    foreach ($certificates as $index => $cert) {
+        // Get issuer cert PEM (next in chain) if available
         $issuerPem = isset($rawCerts[$index + 1]) ? $rawCerts[$index + 1] : null;
+        $certPem = $rawCerts[$index];
+        $certInfo = $parsedCertInfo[$index];
 
-        // Get cert common name for reporting
-        $certResource = openssl_x509_read($certPem);
-        $certCommonName = 'Unknown';
-        if ($certResource) {
-            $certInfo = openssl_x509_parse($certResource);
-            if ($certInfo && isset($certInfo['subject']['CN'])) {
-                $cnValue = $certInfo['subject']['CN'];
-                $certCommonName = is_array($cnValue) ? implode(', ', $cnValue) : $cnValue;
-            }
-        }
-
-        // Check revocation status for this certificate
-        $status = check_cert_revocation($certPem, $issuerPem);
+        // Check revocation status using already-parsed cert info
+        $status = check_cert_revocation($certPem, $certInfo, $issuerPem);
 
         $revocationChecks[] = [
             'index' => $index,
-            'commonName' => $certCommonName,
+            'commonName' => $cert['commonName'],
             'status' => $status
         ];
 
@@ -716,7 +707,7 @@ try {
         if ($status === 'revoked') {
             $hasRevokedCert = true;
             $certType = $index === 0 ? 'Certificate' : 'Intermediate certificate';
-            $chainStatus['issues'][] = "{$certType} has been REVOKED: {$certCommonName}";
+            $chainStatus['issues'][] = "{$certType} has been REVOKED: {$cert['commonName']}";
             $chainStatus['isValid'] = false;
         }
 
