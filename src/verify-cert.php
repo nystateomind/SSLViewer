@@ -113,6 +113,147 @@ function get_dns_records($hostname)
     return $records;
 }
 
+/**
+ * Checks revocation status of a certificate using OCSP and CRL.
+ * @param string $certPem The PEM-encoded certificate to check.
+ * @param string|null $issuerPem The PEM-encoded issuer certificate (required for OCSP).
+ * @return string Revocation status: 'good', 'revoked', 'ocsp_error', 'crl_good', 'crl_error', 'no_revocation_info', etc.
+ */
+function check_cert_revocation($certPem, $issuerPem = null)
+{
+    $revocationStatus = 'unknown';
+
+    $certResource = openssl_x509_read($certPem);
+    if (!$certResource) {
+        return 'error';
+    }
+
+    $certInfo = openssl_x509_parse($certResource);
+    if (!$certInfo) {
+        return 'error';
+    }
+
+    // Skip revocation check for self-signed/root certificates
+    if ($certInfo['subject'] === $certInfo['issuer']) {
+        return 'not_applicable';
+    }
+
+    // --- OCSP Check (requires issuer cert) ---
+    if ($issuerPem) {
+        $ocspUrl = null;
+        if (isset($certInfo['extensions']['authorityInfoAccess'])) {
+            if (preg_match('/OCSP\s*-\s*URI:(\S+)/i', $certInfo['extensions']['authorityInfoAccess'], $matches)) {
+                $ocspUrl = $matches[1];
+            }
+        }
+
+        if ($ocspUrl) {
+            $leafFile = tempnam(sys_get_temp_dir(), 'cert_');
+            $issuerFile = tempnam(sys_get_temp_dir(), 'issuer_');
+
+            file_put_contents($leafFile, $certPem);
+            file_put_contents($issuerFile, $issuerPem);
+
+            $ocspCommand = sprintf(
+                'openssl ocsp -issuer %s -cert %s -url %s -no_nonce 2>&1',
+                escapeshellarg($issuerFile),
+                escapeshellarg($leafFile),
+                escapeshellarg($ocspUrl)
+            );
+
+            $ocspOutput = shell_exec($ocspCommand);
+
+            @unlink($leafFile);
+            @unlink($issuerFile);
+
+            if ($ocspOutput !== null) {
+                if (stripos($ocspOutput, ': good') !== false) {
+                    return 'good';
+                } elseif (stripos($ocspOutput, ': revoked') !== false) {
+                    return 'revoked';
+                } elseif (stripos($ocspOutput, 'error') !== false || stripos($ocspOutput, 'unauthorized') !== false) {
+                    $revocationStatus = 'ocsp_error';
+                } else {
+                    $revocationStatus = 'ocsp_unknown';
+                }
+            } else {
+                $revocationStatus = 'ocsp_error';
+            }
+        } else {
+            $revocationStatus = 'no_ocsp';
+        }
+    } else {
+        // No issuer available, check if OCSP URL exists
+        if (
+            isset($certInfo['extensions']['authorityInfoAccess']) &&
+            stripos($certInfo['extensions']['authorityInfoAccess'], 'OCSP') !== false
+        ) {
+            $revocationStatus = 'ocsp_available';
+        } else {
+            $revocationStatus = 'no_ocsp';
+        }
+    }
+
+    // --- CRL Fallback if OCSP failed or not available ---
+    if (in_array($revocationStatus, ['no_ocsp', 'ocsp_error', 'ocsp_unknown', 'error', 'unknown'])) {
+        $crlUrl = null;
+        if (isset($certInfo['extensions']['crlDistributionPoints'])) {
+            if (preg_match('/URI:(\S+)/i', $certInfo['extensions']['crlDistributionPoints'], $matches)) {
+                $crlUrl = $matches[1];
+            }
+        }
+
+        if ($crlUrl) {
+            $serialNumber = $certInfo['serialNumber'] ?? null;
+            $serialHex = $certInfo['serialNumberHex'] ?? null;
+
+            if ($serialNumber || $serialHex) {
+                $crlFile = tempnam(sys_get_temp_dir(), 'crl_');
+
+                $ch = curl_init($crlUrl);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+                $crlData = curl_exec($ch);
+                $curlError = curl_errno($ch);
+
+                if (!$curlError && $crlData) {
+                    file_put_contents($crlFile, $crlData);
+
+                    $crlCommand = sprintf('openssl crl -in %s -inform DER -text -noout 2>&1', escapeshellarg($crlFile));
+                    $crlOutput = shell_exec($crlCommand);
+
+                    if (stripos($crlOutput, 'error') !== false) {
+                        $crlCommand = sprintf('openssl crl -in %s -inform PEM -text -noout 2>&1', escapeshellarg($crlFile));
+                        $crlOutput = shell_exec($crlCommand);
+                    }
+
+                    @unlink($crlFile);
+
+                    if ($crlOutput && stripos($crlOutput, 'error') === false) {
+                        $serialToFind = strtoupper($serialHex ?: dechex($serialNumber));
+                        $serialToFind = ltrim($serialToFind, '0');
+
+                        if (stripos($crlOutput, $serialToFind) !== false) {
+                            return 'revoked';
+                        } else {
+                            return 'crl_good';
+                        }
+                    } else {
+                        $revocationStatus = 'crl_error';
+                    }
+                } else {
+                    $revocationStatus = 'crl_error';
+                }
+            }
+        } else if ($revocationStatus === 'no_ocsp') {
+            $revocationStatus = 'no_revocation_info';
+        }
+    }
+
+    return $revocationStatus;
+}
+
 // --- Main execution in a try-catch block ---
 try {
     // --- Input Validation ---
@@ -163,7 +304,7 @@ try {
     $starttlsProtocol = null;
     if ($port === 5432) {
         $starttlsProtocol = 'postgres';
-    } elseif ($port === 25 || $port === 587) {
+    } elseif ($port === 25 || $port === 587 || $port === 25587) {
         $starttlsProtocol = 'smtp';
     } elseif ($port === 21) {
         $starttlsProtocol = 'ftp';
@@ -542,153 +683,58 @@ try {
         // Note: Summary message is set below based on this flag, no need to add to issues array
     }
 
-    // --- OCSP Revocation Check for leaf certificate ---
-    if (!empty($rawCerts[0]) && count($rawCerts) >= 2) {
-        $leafPem = $rawCerts[0];
-        $issuerPem = $rawCerts[1]; // Issuer is usually second in chain
+    // --- Revocation Check for ALL certificates in chain ---
+    $revocationChecks = [];
+    $hasRevokedCert = false;
+    $overallRevocationStatus = 'unknown';
 
-        $certResource = openssl_x509_read($leafPem);
+    foreach ($rawCerts as $index => $certPem) {
+        // Get issuer cert (next in chain) if available
+        $issuerPem = isset($rawCerts[$index + 1]) ? $rawCerts[$index + 1] : null;
+
+        // Get cert common name for reporting
+        $certResource = openssl_x509_read($certPem);
+        $certCommonName = 'Unknown';
         if ($certResource) {
             $certInfo = openssl_x509_parse($certResource);
-
-            // Check for OCSP URL in Authority Information Access
-            $ocspUrl = null;
-            if (isset($certInfo['extensions']['authorityInfoAccess'])) {
-                if (preg_match('/OCSP\s*-\s*URI:(\S+)/i', $certInfo['extensions']['authorityInfoAccess'], $matches)) {
-                    $ocspUrl = $matches[1];
-                }
-            }
-
-            if ($ocspUrl) {
-                // Create temp files for OCSP check
-                $leafFile = tempnam(sys_get_temp_dir(), 'leaf_');
-                $issuerFile = tempnam(sys_get_temp_dir(), 'issuer_');
-
-                file_put_contents($leafFile, $leafPem);
-                file_put_contents($issuerFile, $issuerPem);
-
-                // Run OCSP check
-                $ocspCommand = sprintf(
-                    'openssl ocsp -issuer %s -cert %s -url %s -no_nonce 2>&1',
-                    escapeshellarg($issuerFile),
-                    escapeshellarg($leafFile),
-                    escapeshellarg($ocspUrl)
-                );
-
-                $ocspOutput = shell_exec($ocspCommand);
-
-                // Clean up temp files
-                @unlink($leafFile);
-                @unlink($issuerFile);
-
-                // Parse OCSP response
-                if ($ocspOutput !== null) {
-                    if (stripos($ocspOutput, ': good') !== false) {
-                        $revocationStatus = 'good';
-                    } elseif (stripos($ocspOutput, ': revoked') !== false) {
-                        $revocationStatus = 'revoked';
-                        $chainStatus['issues'][] = "Certificate has been REVOKED";
-                        $chainStatus['isValid'] = false;
-                    } elseif (stripos($ocspOutput, 'error') !== false || stripos($ocspOutput, 'unauthorized') !== false) {
-                        $revocationStatus = 'ocsp_error';
-                    } else {
-                        $revocationStatus = 'ocsp_unknown';
-                    }
-                } else {
-                    $revocationStatus = 'ocsp_error';
-                }
-            } else {
-                $revocationStatus = 'no_ocsp';
+            if ($certInfo && isset($certInfo['subject']['CN'])) {
+                $cnValue = $certInfo['subject']['CN'];
+                $certCommonName = is_array($cnValue) ? implode(', ', $cnValue) : $cnValue;
             }
         }
-    } elseif (!empty($rawCerts[0])) {
-        // Only have leaf cert, check if OCSP URL exists
-        $certResource = openssl_x509_read($rawCerts[0]);
-        if ($certResource) {
-            $certInfo = openssl_x509_parse($certResource);
-            if (
-                isset($certInfo['extensions']['authorityInfoAccess']) &&
-                stripos($certInfo['extensions']['authorityInfoAccess'], 'OCSP') !== false
-            ) {
-                $revocationStatus = 'ocsp_available';
-            } else {
-                $revocationStatus = 'no_ocsp';
+
+        // Check revocation status for this certificate
+        $status = check_cert_revocation($certPem, $issuerPem);
+
+        $revocationChecks[] = [
+            'index' => $index,
+            'commonName' => $certCommonName,
+            'status' => $status
+        ];
+
+        // Track if any certificate is revoked
+        if ($status === 'revoked') {
+            $hasRevokedCert = true;
+            $certType = $index === 0 ? 'Certificate' : 'Intermediate certificate';
+            $chainStatus['issues'][] = "{$certType} has been REVOKED: {$certCommonName}";
+            $chainStatus['isValid'] = false;
+        }
+
+        // Set overall status (use first definitive status found)
+        if ($overallRevocationStatus === 'unknown') {
+            if (in_array($status, ['good', 'crl_good', 'revoked'])) {
+                $overallRevocationStatus = $status;
             }
+        }
+        // Revoked takes precedence over everything
+        if ($status === 'revoked') {
+            $overallRevocationStatus = 'revoked';
         }
     }
 
-    // --- CRL Fallback if OCSP failed or not available ---
-    if (in_array($revocationStatus, ['no_ocsp', 'ocsp_error', 'ocsp_unknown', 'error', 'unknown']) && !empty($rawCerts[0])) {
-        $leafPem = $rawCerts[0];
-        $certResource = openssl_x509_read($leafPem);
-        if ($certResource) {
-            $certInfo = openssl_x509_parse($certResource);
-
-            // Check for CRL Distribution Points
-            $crlUrl = null;
-            if (isset($certInfo['extensions']['crlDistributionPoints'])) {
-                if (preg_match('/URI:(\S+)/i', $certInfo['extensions']['crlDistributionPoints'], $matches)) {
-                    $crlUrl = $matches[1];
-                }
-            }
-
-            if ($crlUrl) {
-                // Get certificate serial number
-                $serialNumber = $certInfo['serialNumber'] ?? null;
-                $serialHex = $certInfo['serialNumberHex'] ?? null;
-
-                if ($serialNumber || $serialHex) {
-                    // Download CRL using openssl
-                    $crlFile = tempnam(sys_get_temp_dir(), 'crl_');
-
-                    // Use curl to download CRL
-                    $ch = curl_init($crlUrl);
-                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-                    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-                    $crlData = curl_exec($ch);
-                    $curlError = curl_errno($ch);
-                    // curl_close() removed - not needed in PHP 8.0+
-
-                    if (!$curlError && $crlData) {
-                        file_put_contents($crlFile, $crlData);
-
-                        // Parse CRL and check for serial
-                        $crlCommand = sprintf('openssl crl -in %s -inform DER -text -noout 2>&1', escapeshellarg($crlFile));
-                        $crlOutput = shell_exec($crlCommand);
-
-                        // If DER format fails, try PEM
-                        if (stripos($crlOutput, 'error') !== false) {
-                            $crlCommand = sprintf('openssl crl -in %s -inform PEM -text -noout 2>&1', escapeshellarg($crlFile));
-                            $crlOutput = shell_exec($crlCommand);
-                        }
-
-                        @unlink($crlFile);
-
-                        if ($crlOutput && stripos($crlOutput, 'error') === false) {
-                            // Check if serial number is in CRL
-                            $serialToFind = strtoupper($serialHex ?: dechex($serialNumber));
-                            // Format serial for comparison (remove leading zeros, uppercase)
-                            $serialToFind = ltrim($serialToFind, '0');
-
-                            if (stripos($crlOutput, $serialToFind) !== false) {
-                                $revocationStatus = 'revoked';
-                                $chainStatus['issues'][] = "Certificate has been REVOKED (CRL check)";
-                                $chainStatus['isValid'] = false;
-                            } else {
-                                $revocationStatus = 'crl_good';
-                            }
-                        } else {
-                            $revocationStatus = 'crl_error';
-                        }
-                    } else {
-                        $revocationStatus = 'crl_error';
-                    }
-                }
-            } else if ($revocationStatus === 'no_ocsp') {
-                $revocationStatus = 'no_revocation_info';
-            }
-        }
+    // If no definitive status found, use the leaf cert's status
+    if ($overallRevocationStatus === 'unknown' && !empty($revocationChecks)) {
+        $overallRevocationStatus = $revocationChecks[0]['status'];
     }
 
     // Set overall validity and summary
@@ -709,7 +755,8 @@ try {
     }
 
     // Add revocation status to chain status
-    $chainStatus['revocationStatus'] = $revocationStatus;
+    $chainStatus['revocationStatus'] = $overallRevocationStatus;
+    $chainStatus['revocationChecks'] = $revocationChecks;
 
     http_response_code(200);
     $responseData = [

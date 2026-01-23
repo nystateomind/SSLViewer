@@ -807,23 +807,30 @@
                         const expiredDate = isExpiredCert ? new Date(cert.validUntil).toLocaleDateString() : '';
                         const certId = `cert-${index}`;
 
+                        // Check if this cert is revoked
+                        const revocationCheck = chainStatus.revocationChecks?.find(r => r.index === index);
+                        const isRevokedCert = revocationCheck?.status === 'revoked';
+
                         // Color classes based on status
                         // Link container colors (default state)
                         let linkClass = 'text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400';
 
-                        // CN specific colors (overrides default if expired)
+                        // CN specific colors (overrides default if expired/revoked)
                         let cnClass = '';
                         let statusText = '';
 
-                        if (isExpiredCert) {
+                        if (isRevokedCert) {
+                            cnClass = 'font-medium text-red-600 dark:text-red-400';
+                            statusText = ` <span class="text-xs font-normal text-red-600 dark:text-red-400">(REVOKED)</span>`;
+                        } else if (isExpiredCert) {
                             cnClass = 'font-medium';
                             statusText = ` <span class="text-xs font-normal text-red-600 dark:text-red-400">(expired ${expiredDate})</span>`;
                         } else {
                             cnClass = 'font-medium';
                         }
 
-                        // Customize status for leaf certificate (index 0) if not expired
-                        if (index === 0 && !isExpiredCert) {
+                        // Customize status for leaf certificate (index 0) if not expired/revoked
+                        if (index === 0 && !isExpiredCert && !isRevokedCert) {
                             const validUntilDate = new Date(cert.validUntil);
                             const now = new Date();
                             const diffTime = validUntilDate - now;
