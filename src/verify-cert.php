@@ -118,19 +118,20 @@ function get_dns_records($hostname)
  * @param string $certPem The PEM-encoded certificate (for temp file creation).
  * @param array $certInfo The parsed certificate info from openssl_x509_parse().
  * @param string|null $issuerPem The PEM-encoded issuer certificate (required for OCSP).
- * @return string Revocation status: 'good', 'revoked', 'ocsp_error', 'crl_good', 'crl_error', 'no_revocation_info', etc.
+ * @return array ['status' => string, 'method' => string|null] - status and method used (ocsp/crl)
  */
 function check_cert_revocation($certPem, $certInfo, $issuerPem = null)
 {
     $revocationStatus = 'unknown';
+    $method = null;
 
     if (!$certInfo) {
-        return 'error';
+        return ['status' => 'error', 'method' => null];
     }
 
     // Skip revocation check for self-signed/root certificates
     if ($certInfo['subject'] === $certInfo['issuer']) {
-        return 'not_applicable';
+        return ['status' => 'not_applicable', 'method' => null];
     }
 
     // --- OCSP Check (requires issuer cert) ---
@@ -163,9 +164,9 @@ function check_cert_revocation($certPem, $certInfo, $issuerPem = null)
 
             if ($ocspOutput !== null) {
                 if (stripos($ocspOutput, ': good') !== false) {
-                    return 'good';
+                    return ['status' => 'good', 'method' => 'ocsp'];
                 } elseif (stripos($ocspOutput, ': revoked') !== false) {
-                    return 'revoked';
+                    return ['status' => 'revoked', 'method' => 'ocsp'];
                 } elseif (stripos($ocspOutput, 'error') !== false || stripos($ocspOutput, 'unauthorized') !== false) {
                     $revocationStatus = 'ocsp_error';
                 } else {
@@ -230,9 +231,9 @@ function check_cert_revocation($certPem, $certInfo, $issuerPem = null)
                         $serialToFind = ltrim($serialToFind, '0');
 
                         if (stripos($crlOutput, $serialToFind) !== false) {
-                            return 'revoked';
+                            return ['status' => 'revoked', 'method' => 'crl'];
                         } else {
-                            return 'crl_good';
+                            return ['status' => 'crl_good', 'method' => 'crl'];
                         }
                     } else {
                         $revocationStatus = 'crl_error';
@@ -246,7 +247,7 @@ function check_cert_revocation($certPem, $certInfo, $issuerPem = null)
         }
     }
 
-    return $revocationStatus;
+    return ['status' => $revocationStatus, 'method' => $method];
 }
 
 // --- Main execution in a try-catch block ---
@@ -695,19 +696,21 @@ try {
         $certInfo = $parsedCertInfo[$index];
 
         // Check revocation status using already-parsed cert info
-        $status = check_cert_revocation($certPem, $certInfo, $issuerPem);
+        $result = check_cert_revocation($certPem, $certInfo, $issuerPem);
+        $status = $result['status'];
+        $method = $result['method'];
 
         $revocationChecks[] = [
             'index' => $index,
             'commonName' => $cert['commonName'],
-            'status' => $status
+            'status' => $status,
+            'method' => $method
         ];
 
         // Track if any certificate is revoked
         if ($status === 'revoked') {
             $hasRevokedCert = true;
-            $certType = $index === 0 ? 'Certificate' : 'Intermediate certificate';
-            $chainStatus['issues'][] = "{$certType} has been REVOKED: {$cert['commonName']}";
+            $chainStatus['issues'][] = "Certificate has been REVOKED";
             $chainStatus['isValid'] = false;
         }
 

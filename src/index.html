@@ -820,8 +820,10 @@
                         let statusText = '';
 
                         if (isRevokedCert) {
+                            const method = revocationCheck?.method?.toUpperCase() || '';
+                            const methodLabel = method ? ` via ${method}` : '';
                             cnClass = 'font-medium text-red-600 dark:text-red-400';
-                            statusText = ` <span class="text-xs font-normal text-red-600 dark:text-red-400">(REVOKED)</span>`;
+                            statusText = ` <span class="text-xs font-normal text-red-600 dark:text-red-400">(REVOKED${methodLabel})</span>`;
                         } else if (isExpiredCert) {
                             cnClass = 'font-medium';
                             statusText = ` <span class="text-xs font-normal text-red-600 dark:text-red-400">(expired ${expiredDate})</span>`;
