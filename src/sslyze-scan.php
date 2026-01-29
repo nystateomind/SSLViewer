@@ -14,6 +14,9 @@ ob_start();
 // Set the content type to JSON for all responses
 header("Content-Type: application/json");
 
+// Include PQC detection functions
+require_once __DIR__ . '/pqc-scan.php';
+
 /**
  * Sends a JSON error response and terminates the script.
  * @param string $message The error message.
@@ -525,6 +528,29 @@ function formatSslyzeResults($jsonOutput, $hostname, $port)
             'name' => 'Weak Cipher Suites',
             'severity' => 'MEDIUM',
             'description' => 'Server supports weak cipher suites (RC4, DES, 3DES, NULL, EXPORT, or anonymous).'
+        ];
+    }
+
+    // PQC (Post-Quantum Cryptography) Key Exchange Detection
+    // Only check PQC if server supports TLS 1.3 (required for PQC)
+    $supportsTls13 = false;
+    foreach ($result['protocolSupport'] as $proto) {
+        if ($proto['protocol'] === 'TLS 1.3' && $proto['supported']) {
+            $supportsTls13 = true;
+            break;
+        }
+    }
+
+    if ($supportsTls13) {
+        $pqcResult = detectPqcSupport($hostname, $port);
+        $securityChecks[] = createPqcSecurityCheck($pqcResult);
+    } else {
+        // Add informational note that PQC requires TLS 1.3
+        $securityChecks[] = [
+            'name' => 'Post-Quantum Key Exchange (ML-KEM)',
+            'passed' => false,
+            'severity' => 'INFO',
+            'description' => 'PQC key exchange not applicable — TLS 1.3 is required for post-quantum support.'
         ];
     }
 
