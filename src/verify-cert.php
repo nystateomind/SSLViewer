@@ -410,6 +410,7 @@ try {
             throw new Exception('The cURL extension is not installed or enabled on this server.', 500);
         }
         $ch = curl_init();
+        $headers = ''; // Initialize to prevent undefined variable error
         curl_setopt($ch, CURLOPT_URL, "https://{$hostname}:{$port}");
         curl_setopt($ch, CURLOPT_PORT, $port);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
