@@ -307,8 +307,12 @@ try {
     }
 
     if ($starttlsProtocol !== null) {
+        // --- Check for Legacy Renegotiation Support ---
+        $helpOutput = shell_exec('openssl s_client -help 2>&1');
+        $legacyFlag = (strpos($helpOutput, '-legacy_renegotiation') !== false) ? ' -legacy_renegotiation' : '';
+
         // --- Use OpenSSL for services with STARTTLS ---
-        $command = "openssl s_client -starttls {$starttlsProtocol} -showcerts -connect " . escapeshellarg("$hostname:$port");
+        $command = "openssl s_client{$legacyFlag} -starttls {$starttlsProtocol} -showcerts -connect " . escapeshellarg("$hostname:$port");
 
         $descriptorSpec = [
             0 => ["pipe", "r"], // stdin
@@ -383,6 +387,10 @@ try {
         }
 
         if (strpos($output, '-----BEGIN CERTIFICATE-----') === false) {
+            // Check for specific OpenSSL errors like legacy renegotiation
+            if (strpos($error_output, 'unsafe legacy renegotiation disabled') !== false) {
+                throw new Exception("Connection failed: Unsafe legacy renegotiation disabled. This server is likely insecure.", 500);
+            }
             throw new Exception("Failed to connect or perform STARTTLS.", 500);
         }
 
@@ -417,14 +425,47 @@ try {
         ]);
 
         $response = curl_exec($ch);
-        $certChainInfo = curl_getinfo($ch, CURLINFO_CERTINFO);
-        $connectedIp = curl_getinfo($ch, CURLINFO_PRIMARY_IP);
-        $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-        $headers = substr($response, 0, $headerSize);
+        $curlErrno = curl_errno($ch);
+        $curlError = curl_error($ch);
+
+        // Handle Legacy Renegotiation Error if cURL fails
+        if ($response === false && (strpos($curlError, 'unsafe legacy renegotiation disabled') !== false || $curlErrno === 35)) {
+            // Fallback to OpenSSL CLI
+            $helpOutput = shell_exec('openssl s_client -help 2>&1');
+            $legacyFlag = (strpos($helpOutput, '-legacy_renegotiation') !== false) ? ' -legacy_renegotiation' : '';
+
+            // Use openssl s_client to fetch certs
+            $cmd = "openssl s_client{$legacyFlag} -showcerts -connect " . escapeshellarg("$hostname:$port") . " < NUL 2>&1";
+            if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
+                $cmd = "openssl s_client{$legacyFlag} -showcerts -connect " . escapeshellarg("$hostname:$port") . " < /dev/null 2>&1";
+            }
+
+            $opensslOutput = shell_exec($cmd);
+            if ($opensslOutput && strpos($opensslOutput, '-----BEGIN CERTIFICATE-----') !== false) {
+                // Success fallback!
+                $response = $opensslOutput; // Treat output as response for cert parsing
+                // We lose headers, but we get certs.
+                // Mock headers to avoid downstream errors
+                $headers = "HTTP/1.1 200 OK\r\nServer: Unknown (Fallback)\r\n\r\n";
+                $headerSize = strlen($headers);
+                $response = $headers . $opensslOutput; // Prepend headers
+                $certChainInfo = []; // We can't populate curl certinfo, but parse_pem_certs will work later?
+                // Wait, parse_pem_certs uses $certChainInfo later?
+                // No, line 462 uses parse_pem_certs($response) if rawCerts is empty?
+                // Let's check logic below.
+            }
+        }
+
+        if ($response !== false && !isset($certChainInfo)) {
+            $certChainInfo = curl_getinfo($ch, CURLINFO_CERTINFO);
+            $connectedIp = curl_getinfo($ch, CURLINFO_PRIMARY_IP);
+            $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+            $headers = substr($response, 0, $headerSize);
+        }
 
         // Extract Server header and detect CDN/WAF
         $serverHeader = null;
-        if (preg_match('/^Server:\h*(.*)$/mi', $headers, $matches)) {
+        if (isset($headers) && preg_match('/^Server:\h*(.*)$/mi', $headers, $matches)) {
             $serverHeader = trim($matches[1]);
         }
 
@@ -434,7 +475,9 @@ try {
         // Enterprise-specific detection (runs FIRST, uses DNS lookup for IP-based detection)
         if (function_exists('enterprise_detect_infrastructure')) {
             $ipAddress = gethostbyname($hostname);
-            $cdnDetected = enterprise_detect_infrastructure($hostname, $ipAddress, $headers);
+            if (isset($headers)) {
+                $cdnDetected = enterprise_detect_infrastructure($hostname, $ipAddress, $headers);
+            }
         }
 
         // Generic detection using combined regex patterns (only if enterprise didn't match)

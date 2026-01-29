@@ -25,7 +25,7 @@ function startPqcScanAsync($hostname, $port)
     if ($isWindows) {
         // Windows: use cmd /c with stdin redirected from NUL for EOF
         $command = sprintf(
-            'cmd /c "openssl s_client -connect %s:%d -tls1_3 -groups %s < NUL 2>&1"',
+            'cmd /c "openssl s_client -legacy_renegotiation -connect %s:%d -tls1_3 -groups %s < NUL 2>&1"',
             escapeshellarg($hostname),
             (int) $port,
             $group
@@ -33,7 +33,7 @@ function startPqcScanAsync($hostname, $port)
     } else {
         // Linux: Use system openssl (requires OpenSSL 3.2+ for PQC groups)
         $command = sprintf(
-            'timeout 5 openssl s_client -connect %s:%d -tls1_3 -groups %s < /dev/null 2>&1',
+            'timeout 5 openssl s_client -legacy_renegotiation -connect %s:%d -tls1_3 -groups %s < /dev/null 2>&1',
             escapeshellarg($hostname),
             (int) $port,
             escapeshellarg($group)
@@ -283,7 +283,7 @@ function testPqcGroup($hostname, $port, $group)
     if ($isWindows) {
         // Windows: use cmd /c with stdin redirected from NUL for EOF
         $command = sprintf(
-            'cmd /c "openssl s_client -connect %s:%d -tls1_3 -groups %s < NUL 2>&1"',
+            'cmd /c "openssl s_client -legacy_renegotiation -connect %s:%d -tls1_3 -groups %s < NUL 2>&1"',
             trim($escapedHost, "'\""),
             (int) $port,
             trim($escapedGroup, "'\"")
@@ -291,7 +291,7 @@ function testPqcGroup($hostname, $port, $group)
     } else {
         // Linux: Use system openssl (requires OpenSSL 3.2+ for PQC groups)
         $command = sprintf(
-            'timeout 5 openssl s_client -connect %s:%d -tls1_3 -groups %s < /dev/null 2>&1',
+            'timeout 5 openssl s_client -legacy_renegotiation -connect %s:%d -tls1_3 -groups %s < /dev/null 2>&1',
             $escapedHost,
             (int) $port,
             $escapedGroup
