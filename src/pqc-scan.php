@@ -31,14 +31,9 @@ function startPqcScanAsync($hostname, $port)
             $group
         );
     } else {
-        // Linux: Use OpenSSL 3.5+ at /usr/local/ssl/bin for PQC support
-        // (system OpenSSL 3.0 doesn't support PQC groups)
-        $opensslBin = file_exists('/usr/local/ssl/bin/openssl')
-            ? '/usr/local/ssl/bin/openssl'
-            : 'openssl';
+        // Linux: Use system openssl (requires OpenSSL 3.2+ for PQC groups)
         $command = sprintf(
-            'timeout 5 %s s_client -connect %s:%d -tls1_3 -groups %s < /dev/null 2>&1',
-            $opensslBin,
+            'timeout 5 openssl s_client -connect %s:%d -tls1_3 -groups %s < /dev/null 2>&1',
             escapeshellarg($hostname),
             (int) $port,
             escapeshellarg($group)
@@ -294,13 +289,9 @@ function testPqcGroup($hostname, $port, $group)
             trim($escapedGroup, "'\"")
         );
     } else {
-        // Linux: Use OpenSSL 3.5+ at /usr/local/ssl/bin for PQC support
-        $opensslBin = file_exists('/usr/local/ssl/bin/openssl')
-            ? '/usr/local/ssl/bin/openssl'
-            : 'openssl';
+        // Linux: Use system openssl (requires OpenSSL 3.2+ for PQC groups)
         $command = sprintf(
-            'timeout 5 %s s_client -connect %s:%d -tls1_3 -groups %s < /dev/null 2>&1',
-            $opensslBin,
+            'timeout 5 openssl s_client -connect %s:%d -tls1_3 -groups %s < /dev/null 2>&1',
             $escapedHost,
             (int) $port,
             $escapedGroup
