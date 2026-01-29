@@ -435,8 +435,14 @@ try {
             $legacyFlag = (strpos($helpOutput, '-legacy_renegotiation') !== false) ? ' -legacy_renegotiation' : '';
 
             // Use openssl s_client to fetch certs
-            $cmd = "openssl s_client{$legacyFlag} -showcerts -connect " . escapeshellarg("$hostname:$port") . " < NUL 2>&1";
-            if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
+            // Use openssl s_client to fetch certs
+            if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                $cmd = sprintf(
+                    'cmd /c "openssl s_client%s -showcerts -connect %s < NUL 2>&1"',
+                    $legacyFlag,
+                    trim(escapeshellarg("$hostname:$port"), "'\"")
+                );
+            } else {
                 $cmd = "openssl s_client{$legacyFlag} -showcerts -connect " . escapeshellarg("$hostname:$port") . " < /dev/null 2>&1";
             }
 
@@ -444,15 +450,17 @@ try {
             if ($opensslOutput && strpos($opensslOutput, '-----BEGIN CERTIFICATE-----') !== false) {
                 // Success fallback!
                 $response = $opensslOutput; // Treat output as response for cert parsing
+                // Parse PEMs directly from OpenSSL output
+                $fallbackCerts = parse_pem_certs($opensslOutput);
+                if (!empty($fallbackCerts)) {
+                    $rawCerts = $fallbackCerts;
+                }
+
                 // We lose headers, but we get certs.
                 // Mock headers to avoid downstream errors
                 $headers = "HTTP/1.1 200 OK\r\nServer: Unknown (Fallback)\r\n\r\n";
                 $headerSize = strlen($headers);
                 $response = $headers . $opensslOutput; // Prepend headers
-                $certChainInfo = []; // We can't populate curl certinfo, but parse_pem_certs will work later?
-                // Wait, parse_pem_certs uses $certChainInfo later?
-                // No, line 462 uses parse_pem_certs($response) if rawCerts is empty?
-                // Let's check logic below.
             }
         }
 
@@ -532,7 +540,14 @@ try {
                 foreach ($genericSignatures as $sig) {
                     if (strpos($lowerServer, $sig) === 0) {
                         $isGeneric = true;
-                        break;
+                    } else {
+                        // Check if it starts with any generic signature (e.g. "apache/2.4")
+                        foreach ($genericSignatures as $sig) {
+                            if (strpos($lowerServer, $sig) === 0) {
+                                $isGeneric = true;
+                                break;
+                            }
+                        }
                     }
                 }
             }
@@ -543,7 +558,7 @@ try {
         }
 
         if (curl_errno($ch)) {
-            if (empty($certChainInfo)) {
+            if (empty($certChainInfo) && empty($rawCerts)) { // Only throw error if we don't have certs from fallback
                 $curlError = curl_error($ch);
                 $curlErrno = curl_errno($ch);
 
