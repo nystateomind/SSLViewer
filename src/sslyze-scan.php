@@ -132,6 +132,13 @@ try {
     // Increase PHP execution time for this long-running scan
     set_time_limit(180); // 3 minutes
 
+    // Start PQC detection in background (runs in parallel with SSLyze)
+    // Only start if it's a standard HTTPS port (PQC only works with TLS 1.3)
+    $pqcProcessInfo = null;
+    if (empty($starttlsOption)) {
+        $pqcProcessInfo = startPqcScanAsync($hostname, $port);
+    }
+
     // Execute sslyze using shell_exec (simpler, avoids pipe deadlock)
     $output = shell_exec($command);
     $errorOutput = ''; // stderr is redirected to stdout via 2>&1
@@ -209,7 +216,14 @@ try {
         }
 
         // Parse and format the SSLyze results
-        $result = formatSslyzeResults($jsonOutput, $hostname, $port);
+        // Collect PQC result (with 0.5 second timeout if still running)
+        // PQC scan typically completes in 2-3 seconds, so if it's not done
+        // after SSLyze (15-30s) plus 0.5s, assume no support
+        $pqcResult = null;
+        if ($pqcProcessInfo !== null) {
+            $pqcResult = collectPqcResult($pqcProcessInfo, 0.5);
+        }
+        $result = formatSslyzeResults($jsonOutput, $hostname, $port, $pqcResult);
         send_json($result);
     }
 
@@ -249,9 +263,10 @@ try {
  * @param array $jsonOutput The parsed SSLyze JSON output.
  * @param string $hostname The target hostname.
  * @param int $port The target port.
+ * @param array|null $pqcResult Pre-computed PQC detection result (from async scan).
  * @return array Formatted results.
  */
-function formatSslyzeResults($jsonOutput, $hostname, $port)
+function formatSslyzeResults($jsonOutput, $hostname, $port, $pqcResult = null)
 {
     $result = [
         'success' => true,
@@ -542,8 +557,18 @@ function formatSslyzeResults($jsonOutput, $hostname, $port)
     }
 
     if ($supportsTls13) {
-        $pqcResult = detectPqcSupport($hostname, $port);
-        $securityChecks[] = createPqcSecurityCheck($pqcResult);
+        if ($pqcResult !== null) {
+            // Use pre-computed async PQC result
+            $securityChecks[] = createPqcSecurityCheck($pqcResult);
+        } else {
+            // Async scan didn't complete - report as not detected (don't block with sync scan)
+            $securityChecks[] = [
+                'name' => 'Post-Quantum Key Exchange (ML-KEM)',
+                'passed' => false,
+                'severity' => 'INFO',
+                'description' => 'Post-quantum cryptography key exchange (ML-KEM/Kyber) not detected on this server.'
+            ];
+        }
     } else {
         // Add informational note that PQC requires TLS 1.3
         $securityChecks[] = [
