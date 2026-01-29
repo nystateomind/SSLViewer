@@ -40,14 +40,16 @@ function send_error($message, $statusCode = 400)
  */
 function send_json($data)
 {
-    // Clear any buffered output
-    ob_end_clean();
+    // Clean potential noise from buffer before sending JSON
+    if (ob_get_length()) {
+        ob_clean();
+    }
 
     if (!headers_sent()) {
         header("Content-Type: application/json");
         http_response_code(200);
     }
-    echo json_encode($data);
+    echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
