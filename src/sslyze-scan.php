@@ -630,8 +630,10 @@ function formatSslyzeResults($jsonOutput, $hostname, $port, $pqcResult = null)
         $result['summary'] = 'No known vulnerabilities detected.';
         $result['overallStatus'] = 'PASS';
     } else {
-        $criticalCount = count(array_filter($result['vulnerabilities'], fn($v) => $v['severity'] === 'CRITICAL'));
-        $highCount = count(array_filter($result['vulnerabilities'], fn($v) => $v['severity'] === 'HIGH'));
+        $criticalCount = count(array_filter($result['vulnerabilities'], function ($v) {
+            return $v['severity'] === 'CRITICAL'; }));
+        $highCount = count(array_filter($result['vulnerabilities'], function ($v) {
+            return $v['severity'] === 'HIGH'; }));
 
         if ($criticalCount > 0) {
             $result['overallStatus'] = 'CRITICAL';
