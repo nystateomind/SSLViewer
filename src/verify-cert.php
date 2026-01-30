@@ -64,8 +64,16 @@ function parse_pem_certs($pemBlock)
     $pattern = '/(-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----)/s';
     preg_match_all($pattern, $pemBlock, $matches);
     if (!empty($matches[1])) {
-        // Deduplicate certs (openssl s_client often outputs leaf cert twice)
-        $certs = array_values(array_unique($matches[1]));
+        // Deduplicate certs by normalizing content (openssl s_client often outputs leaf cert twice)
+        $seen = [];
+        foreach ($matches[1] as $cert) {
+            // Normalize by removing all whitespace to compare actual content
+            $normalized = preg_replace('/\s+/', '', $cert);
+            if (!isset($seen[$normalized])) {
+                $seen[$normalized] = true;
+                $certs[] = $cert;
+            }
+        }
     }
     return $certs;
 }
@@ -436,7 +444,6 @@ try {
             $helpOutput = shell_exec('openssl s_client -help 2>&1');
             $legacyFlag = (strpos($helpOutput, '-legacy_renegotiation') !== false) ? ' -legacy_renegotiation' : '';
 
-            // Use openssl s_client to fetch certs
             // Use openssl s_client to fetch certs
             if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
                 $cmd = sprintf(
