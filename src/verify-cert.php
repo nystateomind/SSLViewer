@@ -584,7 +584,7 @@ try {
         }
         // curl_close() removed - not needed in PHP 8.0+, handles auto-close
 
-        if (!empty($certChainInfo)) {
+        if (empty($rawCerts) && !empty($certChainInfo)) {
             foreach ($certChainInfo as $certData) {
                 if (!empty($certData['Cert'])) {
                     $rawCerts[] = $certData['Cert'];
