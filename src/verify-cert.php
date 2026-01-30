@@ -430,7 +430,7 @@ try {
         $curlError = curl_error($ch);
 
         // Handle Legacy Renegotiation Error if cURL fails
-        if ($response === false && (strpos($curlError, 'unsafe legacy renegotiation disabled') !== false || $curlErrno === 35)) {
+        if ($response === false && (strpos($curlError, 'unsafe legacy renegotiation disabled') !== false || strpos($curlError, 'Empty reply from server') !== false || $curlErrno === 35 || $curlErrno === 52)) {
             // Fallback to OpenSSL CLI
             $helpOutput = shell_exec('openssl s_client -help 2>&1');
             $legacyFlag = (strpos($helpOutput, '-legacy_renegotiation') !== false) ? ' -legacy_renegotiation' : '';
