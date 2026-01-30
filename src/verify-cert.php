@@ -456,6 +456,7 @@ try {
                 $fallbackCerts = parse_pem_certs($opensslOutput);
                 if (!empty($fallbackCerts)) {
                     $rawCerts = $fallbackCerts;
+                    $certChainInfo = []; // Prevent curl_getinfo from overriding fallback certs
                 }
 
                 // We lose headers, but we get certs.
