@@ -64,7 +64,8 @@ function parse_pem_certs($pemBlock)
     $pattern = '/(-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----)/s';
     preg_match_all($pattern, $pemBlock, $matches);
     if (!empty($matches[1])) {
-        $certs = $matches[1];
+        // Deduplicate certs (openssl s_client often outputs leaf cert twice)
+        $certs = array_values(array_unique($matches[1]));
     }
     return $certs;
 }
