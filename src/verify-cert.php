@@ -487,9 +487,12 @@ try {
                 }
 
                 // We lose HTTP headers, but we can still detect infrastructure
-                // Mock headers to avoid downstream errors
-                $mockServerValue = $serverHeader ?? 'Unknown (Fallback)';
-                $headers = "HTTP/1.1 200 OK\r\nServer: {$mockServerValue}\r\n\r\n";
+                // Only include Server header if we detected something
+                if ($serverHeader) {
+                    $headers = "HTTP/1.1 200 OK\r\nServer: {$serverHeader}\r\n\r\n";
+                } else {
+                    $headers = "HTTP/1.1 200 OK\r\n\r\n";
+                }
                 $headerSize = strlen($headers);
                 $response = $headers . $opensslOutput; // Prepend headers
             }
