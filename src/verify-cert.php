@@ -466,9 +466,30 @@ try {
                     $certChainInfo = []; // Prevent curl_getinfo from overriding fallback certs
                 }
 
-                // We lose headers, but we get certs.
+                // Extract connected IP from OpenSSL output (format: "Connecting to X.X.X.X")
+                if (preg_match('/^Connecting to ([0-9a-f.:]+)/mi', $opensslOutput, $ipMatches)) {
+                    $connectedIp = $ipMatches[1];
+                } else {
+                    // Fallback to DNS lookup
+                    $connectedIp = gethostbyname($hostname);
+                    if ($connectedIp === $hostname) {
+                        $connectedIp = null; // DNS lookup failed
+                    }
+                }
+
+                // Run enterprise detection if we have an IP
+                $serverHeader = null;
+                if ($connectedIp && function_exists('enterprise_detect_infrastructure')) {
+                    $detected = enterprise_detect_infrastructure($hostname, $connectedIp, '');
+                    if ($detected) {
+                        $serverHeader = $detected;
+                    }
+                }
+
+                // We lose HTTP headers, but we can still detect infrastructure
                 // Mock headers to avoid downstream errors
-                $headers = "HTTP/1.1 200 OK\r\nServer: Unknown (Fallback)\r\n\r\n";
+                $mockServerValue = $serverHeader ?? 'Unknown (Fallback)';
+                $headers = "HTTP/1.1 200 OK\r\nServer: {$mockServerValue}\r\n\r\n";
                 $headerSize = strlen($headers);
                 $response = $headers . $opensslOutput; // Prepend headers
             }
