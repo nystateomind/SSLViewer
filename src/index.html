@@ -97,6 +97,11 @@
         input[type=number] {
             appearance: textfield;
         }
+
+        /* Fix vertical scrollbar on tables */
+        .overflow-y-visible {
+            overflow-y: visible !important;
+        }
     </style>
 </head>
 
@@ -1197,7 +1202,7 @@
 
                 if (data.protocolSupport && data.protocolSupport.length > 0) {
                     html += `<h4 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-4 mb-2">Protocol Support</h4>`;
-                    html += `<div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700"><table class="min-w-full text-sm divide-y divide-slate-200 dark:divide-slate-700">
+                    html += `<div class="overflow-x-auto overflow-y-visible rounded-lg border border-slate-200 dark:border-slate-700"><table class="min-w-full text-sm divide-y divide-slate-200 dark:divide-slate-700">
                         <thead class="bg-slate-50 dark:bg-slate-900/50"><tr>
                             <th class="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Protocol</th>
                             <th class="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Status</th>
@@ -1265,7 +1270,7 @@
 
                 if (data.securityChecks && data.securityChecks.length > 0) {
                     html += `<h4 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-6 mb-2">Security Checks</h4>`;
-                    html += `<div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700"><table class="min-w-full text-sm divide-y divide-slate-200 dark:divide-slate-700">
+                    html += `<div class="overflow-x-auto overflow-y-visible rounded-lg border border-slate-200 dark:border-slate-700"><table class="min-w-full text-sm divide-y divide-slate-200 dark:divide-slate-700">
                         <thead class="bg-slate-50 dark:bg-slate-900/50"><tr>
                             <th class="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Check</th>
                             <th class="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Severity</th>

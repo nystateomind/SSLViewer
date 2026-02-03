@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
     content: ["./src/**/*.{html,js,php}"],
+    safelist: ['overflow-y-visible'],
     darkMode: 'class',
     theme: {
         extend: {
