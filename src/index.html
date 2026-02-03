@@ -606,11 +606,19 @@
 
         /**
          * Toggles visibility of cipher list in SSLyze results.
+         * Also toggles the parent row to prevent empty space causing scrollbars.
          * @param {string} id - Element ID to toggle
          */
         function toggleCipherList(id) {
             const el = document.getElementById(id);
-            if (el) el.classList.toggle('hidden');
+            if (el) {
+                el.classList.toggle('hidden');
+                // Also toggle the parent tr row to prevent scrollbar when collapsed
+                const parentRow = el.closest('tr');
+                if (parentRow) {
+                    parentRow.classList.toggle('hidden');
+                }
+            }
         }
 
         /**
@@ -1261,7 +1269,7 @@
                             <td class="px-4 py-3 ${statusClass} font-medium">${statusText}</td>
                             <td class="px-4 py-3 text-slate-700 dark:text-slate-300">${cipherClickable}</td>
                         </tr>
-                        <tr class="${proto.ciphers && proto.ciphers.length > 0 ? '' : 'hidden'}">
+                        <tr class="hidden">
                             <td colspan="3" class="px-4 py-0 border-0">${cipherListHtml}</td>
                         </tr>`;
                     });
