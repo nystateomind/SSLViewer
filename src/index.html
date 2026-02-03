@@ -732,7 +732,14 @@
 
                 } catch (err) {
                     resultsContainer.innerHTML = ''; // Clear loading
-                    renderError(err.message || 'An unexpected error occurred.');
+                    // Distinguish between network errors and other errors
+                    let errorMessage = err.message || 'An unexpected error occurred.';
+                    if (err.name === 'TypeError' && err.message.includes('fetch')) {
+                        errorMessage = 'Unable to connect to the server. Please check your connection and try again.';
+                    } else if (err.message.includes('JSON') || err.message.includes('Unexpected token')) {
+                        errorMessage = 'Server returned an invalid response. This may indicate a server-side error.';
+                    }
+                    renderError(errorMessage);
                 } finally {
                     setLoading(false);
                 }

@@ -438,8 +438,15 @@ try {
         $curlErrno = curl_errno($ch);
         $curlError = curl_error($ch);
 
-        // Fallback to OpenSSL CLI if cURL fails for ANY reason
-        if ($response === false) {
+        // Fallback to OpenSSL CLI only for TLS-related issues, NOT connection failures
+        // Connection failures (timeout, refused, DNS) mean OpenSSL will also fail
+        $connectionErrors = [
+            CURLE_COULDNT_RESOLVE_HOST,  // 6 - DNS failure
+            CURLE_COULDNT_CONNECT,        // 7 - Connection refused
+            CURLE_OPERATION_TIMEDOUT,     // 28 - Timeout
+        ];
+
+        if ($response === false && !in_array($curlErrno, $connectionErrors)) {
             // Fallback to OpenSSL CLI
             $helpOutput = shell_exec('openssl s_client -help 2>&1');
             $legacyFlag = (strpos($helpOutput, '-legacy_renegotiation') !== false) ? ' -legacy_renegotiation' : '';
