@@ -692,7 +692,7 @@ try {
             'pem' => $pemCert, // Include raw PEM for download
             'commonName' => $subjectCn,
             'organization' => $subjectO,
-            'alternativeNames' => isset($certInfo['extensions']['subjectAltName']) ? array_map('trim', explode(',', str_replace('DNS:', '', $certInfo['extensions']['subjectAltName']))) : [],
+            'alternativeNames' => isset($certInfo['extensions']['subjectAltName']) ? array_map('trim', explode(',', preg_replace('/\b(DNS|IP Address):/i', '', $certInfo['extensions']['subjectAltName']))) : [],
             'serialNumberHex' => $certInfo['serialNumberHex'] ?? 'N/A',
             'serialNumberDecimal' => $certInfo['serialNumber'] ?? 'N/A',
             'validFrom' => isset($certInfo['validFrom_time_t']) ? gmdate("Y-m-d\TH:i:s\Z", $certInfo['validFrom_time_t']) : 'N/A',
@@ -738,6 +738,7 @@ try {
 
         // Check if hostname is in SAN (only for leaf certificate)
         if ($index === 0) {
+            $isIpAddress = filter_var($hostname, FILTER_VALIDATE_IP) !== false;
             // Check CN
             if (strcasecmp($cert['commonName'], $hostname) === 0) {
                 $hostnameInSan = true;
@@ -746,13 +747,22 @@ try {
             if (!empty($cert['alternativeNames'])) {
                 foreach ($cert['alternativeNames'] as $san) {
                     $san = trim($san);
-                    // Exact match
+                    // Exact match (covers both DNS names and IP addresses)
                     if (strcasecmp($san, $hostname) === 0) {
                         $hostnameInSan = true;
                         break;
                     }
+                    // For IP addresses, also compare normalized forms
+                    if ($isIpAddress && filter_var($san, FILTER_VALIDATE_IP) !== false) {
+                        // Compare using inet_pton for proper IPv6 normalization
+                        if (inet_pton($san) === inet_pton($hostname)) {
+                            $hostnameInSan = true;
+                            break;
+                        }
+                    }
                     // Wildcard match (*.example.com matches sub.example.com)
-                    if (strpos($san, '*.') === 0) {
+                    // Note: Wildcards are not valid for IP addresses per RFC 6125
+                    if (!$isIpAddress && strpos($san, '*.') === 0) {
                         $wildcardDomain = substr($san, 2);
                         $hostnameParts = explode('.', $hostname, 2);
                         if (count($hostnameParts) === 2 && strcasecmp($hostnameParts[1], $wildcardDomain) === 0) {

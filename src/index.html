@@ -1904,6 +1904,22 @@
                 return;
             }
 
+            // Detect certificate chains (multiple certificates)
+            const certMatches = pem.match(/-----BEGIN CERTIFICATE-----/g);
+            if (certMatches && certMatches.length > 1) {
+                output.innerHTML = `<div class="p-4 text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800" role="alert">
+                    <strong class="font-bold">Certificate Chain Detected</strong>
+                    <p class="mt-2">Your input contains ${certMatches.length} certificates (a certificate chain). The PEM Decoder currently supports decoding one certificate at a time.</p>
+                    <p class="mt-2">Please paste only the certificate you want to decode. Typically:</p>
+                    <ul class="list-disc list-inside mt-1 ml-2">
+                        <li><strong>Leaf certificate</strong> – the first one in the chain</li>
+                        <li><strong>Intermediate certificate</strong> – in the middle</li>
+                        <li><strong>Root certificate</strong> – the last one in the chain</li>
+                    </ul>
+                </div>`;
+                return;
+            }
+
             if (!pem.includes('-----BEGIN CERTIFICATE-----')) {
                 pem = pem.replace(/-----(BEGIN|END) CERTIFICATE-----/g, '').replace(/[\r\n\s]/g, '');
                 pem = pem.match(/.{1,64}/g).join('\n');
