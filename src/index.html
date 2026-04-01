@@ -2366,7 +2366,29 @@
             // Read the top-level algorithm OID — must be id-PBES2
             const topOid = forge.asn1.derToOid(algSeq.value[0].value);
             if (topOid !== PBES2_OID) {
-                throw new Error('Unsupported PKCS#8 encryption scheme (OID: ' + topOid + '). Only PBES2 is supported by the fallback decoder.');
+                // Detect deprecated PKCS#12 PBE schemes and give actionable guidance
+                const DEPRECATED_PBE_OIDS = {
+                    '1.2.840.113549.1.12.1.1': 'pbeWithSHA1And128BitRC4',
+                    '1.2.840.113549.1.12.1.2': 'pbeWithSHA1And40BitRC4',
+                    '1.2.840.113549.1.12.1.3': 'pbeWithSHA1And3-KeyTripleDES-CBC',
+                    '1.2.840.113549.1.12.1.4': 'pbeWithSHA1And2-KeyTripleDES-CBC',
+                    '1.2.840.113549.1.12.1.5': 'pbeWithSHA1And128BitRC2-CBC',
+                    '1.2.840.113549.1.12.1.6': 'pbeWithSHA1And40BitRC2-CBC',
+                    '1.2.840.113549.1.5.3': 'pbeWithMD5AndDES-CBC',
+                    '1.2.840.113549.1.5.6': 'pbeWithMD5AndRC2-CBC',
+                    '1.2.840.113549.1.5.10': 'pbeWithSHA1AndDES-CBC',
+                    '1.2.840.113549.1.5.11': 'pbeWithSHA1AndRC2-CBC',
+                };
+                const deprecatedName = DEPRECATED_PBE_OIDS[topOid];
+                if (deprecatedName) {
+                    throw new Error(
+                        'This key uses a deprecated and insecure encryption scheme (' + deprecatedName + ') ' +
+                        'that relies on broken or obsolete ciphers (RC4, DES, or RC2). ' +
+                        'Please re-encrypt the key with a modern algorithm using OpenSSL:\n\n' +
+                        'openssl pkcs8 -topk8 -in old_key.pem -out new_key.pem -v2 aes-256-cbc'
+                    );
+                }
+                throw new Error('Unsupported PKCS#8 encryption scheme (OID: ' + topOid + '). Only PBES2 is supported.');
             }
 
             // Parse PBES2-params: SEQUENCE { keyDerivationFunc, encryptionScheme }
