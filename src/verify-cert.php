@@ -780,10 +780,57 @@ try {
         $chainStatus['issues'][] = "Hostname '{$hostname}' is not listed in the certificate's Subject Alternative Names (SAN)";
     }
 
-    // Check for incomplete chain (only leaf certificate, no intermediate)
-    if (count($certificates) === 1 && !$hasSelfSigned) {
-        $isIncompleteChain = true;
-        // Note: Summary message is set below based on this flag, no need to add to issues array
+    // Build a lookup of parsed cert info for each raw cert
+    // (used for chain linkage validation and revocation checks)
+    $parsedCertInfo = [];
+    foreach ($rawCerts as $idx => $pem) {
+        $res = openssl_x509_read($pem);
+        $parsedCertInfo[$idx] = $res ? openssl_x509_parse($res) : null;
+    }
+
+    // Check for incomplete chain by validating issuer/subject linkage
+    // A proper chain should have each cert's issuer match the next cert's subject
+    if (!$hasSelfSigned) {
+        if (count($certificates) === 1) {
+            // Only leaf certificate, no intermediate at all
+            $isIncompleteChain = true;
+        } else {
+            // Multiple certs present - verify each link in the chain
+            // Check that cert[i].issuer == cert[i+1].subject for each pair
+            for ($i = 0; $i < count($rawCerts) - 1; $i++) {
+                $currentInfo = $parsedCertInfo[$i] ?? null;
+                $nextInfo = $parsedCertInfo[$i + 1] ?? null;
+
+                if (!$currentInfo || !$nextInfo) continue;
+
+                $currentIssuer = $currentInfo['issuer'] ?? [];
+                $nextSubject = $nextInfo['subject'] ?? [];
+
+                // If the current cert's issuer doesn't match the next cert's subject,
+                // there's a gap in the chain (missing intermediate)
+                if ($currentIssuer !== $nextSubject) {
+                    $isIncompleteChain = true;
+                    $missingIssuerCn = $currentIssuer['CN'] ?? format_distinguished_name($currentIssuer);
+                    $chainStatus['issues'][] = "Missing intermediate certificate: chain has a gap after {$certificates[$i]['commonName']}";
+                    break;
+                }
+
+                // Also verify cryptographic signature (cert[i] should be signed by cert[i+1])
+                $currentRes = openssl_x509_read($rawCerts[$i]);
+                $nextRes = openssl_x509_read($rawCerts[$i + 1]);
+                if ($currentRes && $nextRes) {
+                    $nextPubKey = openssl_pkey_get_public($nextRes);
+                    if ($nextPubKey) {
+                        $verifyResult = openssl_x509_verify($currentRes, $nextPubKey);
+                        if ($verifyResult !== 1) {
+                            $isIncompleteChain = true;
+                            $chainStatus['issues'][] = "Certificate signature verification failed: {$certificates[$i]['commonName']} is not signed by {$certificates[$i + 1]['commonName']}";
+                            break;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // --- Revocation Check for ALL certificates in chain ---
@@ -791,12 +838,7 @@ try {
     $hasRevokedCert = false;
     $overallRevocationStatus = 'unknown';
 
-    // Build a lookup of parsed cert info for each raw cert (to pass to revocation check)
-    $parsedCertInfo = [];
-    foreach ($rawCerts as $idx => $pem) {
-        $res = openssl_x509_read($pem);
-        $parsedCertInfo[$idx] = $res ? openssl_x509_parse($res) : null;
-    }
+    // $parsedCertInfo was already built above (used for chain linkage validation)
 
     foreach ($certificates as $index => $cert) {
         // Get issuer cert PEM (next in chain) if available

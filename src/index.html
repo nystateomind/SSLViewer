@@ -880,16 +880,57 @@
                     });
 
                     // If chain is incomplete (missing intermediate), show it
-                    if (isIncomplete && certificates.length === 1) {
-                        const leafCert = certificates[0];
-                        const issuerMatch = leafCert.issuer.match(/CN=([^,]+)/);
-                        const issuerCn = issuerMatch ? issuerMatch[1] : leafCert.issuer;
+                    if (isIncomplete) {
+                        if (certificates.length === 1) {
+                            // Single cert: show missing intermediate after leaf
+                            const leafCert = certificates[0];
+                            const issuerMatch = leafCert.issuer.match(/CN=([^,]+)/);
+                            const issuerCn = issuerMatch ? issuerMatch[1] : leafCert.issuer;
 
-                        chainHtml += `
-                            <div style="margin-left: 46px" class="flex items-center py-0.5 text-slate-700 dark:text-slate-300">
-                                ${cornerArrowSvg}<span><span class="opacity-60">Intermediate:</span> <span class="font-medium">${issuerCn}</span> <span class="text-amber-600 dark:text-amber-400 text-xs ml-1">(missing)</span></span>
-                            </div>
-                        `;
+                            chainHtml += `
+                                <div style="margin-left: 46px" class="flex items-center py-0.5 text-slate-700 dark:text-slate-300">
+                                    ${cornerArrowSvg}<span><span class="opacity-60">Intermediate:</span> <span class="font-medium">${issuerCn}</span> <span class="text-amber-600 dark:text-amber-400 text-xs ml-1">(missing)</span></span>
+                                </div>
+                            `;
+                        } else {
+                            // Multiple certs: find the gap and insert missing intermediate
+                            // Look for where issuer of cert[i] doesn't match subject of cert[i+1]
+                            for (let i = 0; i < certificates.length - 1; i++) {
+                                const currentIssuer = certificates[i].issuer;
+                                // Build a comparable subject string from the next cert
+                                const nextCn = certificates[i + 1].commonName;
+                                // Check if the issuer CN contains the next cert's CN
+                                const issuerCnMatch = currentIssuer.match(/CN=([^,]+)/);
+                                const issuerCn = issuerCnMatch ? issuerCnMatch[1].trim() : '';
+
+                                if (issuerCn && issuerCn !== nextCn) {
+                                    // Gap found between cert[i] and cert[i+1]
+                                    const gapIndent = 26 + ((i + 1) * 20);
+                                    chainHtml = chainHtml.replace(
+                                        new RegExp(`(id="cert-${i + 1}")`),
+                                        `$1`
+                                    );
+                                    // Insert the missing intermediate annotation
+                                    // We need to rebuild: insert it after cert[i]'s div and before cert[i+1]'s div
+                                    const missingHtml = `
+                                        <div style="margin-left: ${gapIndent}px" class="flex items-center py-0.5 text-slate-700 dark:text-slate-300">
+                                            ${cornerArrowSvg}<span><span class="opacity-60">Intermediate:</span> <span class="font-medium">${issuerCn}</span> <span class="text-amber-600 dark:text-amber-400 text-xs ml-1">(missing)</span></span>
+                                        </div>
+                                    `;
+                                    // Find the position of the next cert entry and insert before it
+                                    const nextCertPattern = `<a href="#cert-${i + 1}"`;
+                                    const insertPos = chainHtml.lastIndexOf(nextCertPattern);
+                                    if (insertPos > -1) {
+                                        // Find the start of the div containing this cert entry
+                                        const divStart = chainHtml.lastIndexOf('<div style=', insertPos);
+                                        if (divStart > -1) {
+                                            chainHtml = chainHtml.slice(0, divStart) + missingHtml + chainHtml.slice(divStart);
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                        }
                     }
 
                     // If no root in chain, infer from last cert's issuer (cross-signed scenario)
@@ -899,7 +940,7 @@
 
                         // Calculate indent: base 26 + (cert count * 20). 
                         // If we showed a "missing intermediate" row (isIncomplete=true), we need to add another level of indent.
-                        const extraStep = (isIncomplete && certificates.length === 1) ? 1 : 0;
+                        const extraStep = isIncomplete ? 1 : 0;
                         const lastIndent = 26 + ((certificates.length + extraStep) * 20);
 
                         // Only show inferred root if it's different from the last cert's CN
