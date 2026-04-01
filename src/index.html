@@ -827,8 +827,25 @@
                     );
                     const lastCert = certificates[certificates.length - 1];
 
+                    // Pre-calculate gap positions for multi-cert incomplete chains
+                    let gapAfterIndex = -1; // index after which a missing intermediate exists
+                    if (isIncomplete && certificates.length > 1) {
+                        for (let i = 0; i < certificates.length - 1; i++) {
+                            const currentIssuer = certificates[i].issuer;
+                            const nextCn = certificates[i + 1].commonName;
+                            const issuerCnMatch = currentIssuer.match(/CN=([^,]+)/);
+                            const issuerCn = issuerCnMatch ? issuerCnMatch[1].trim() : '';
+                            if (issuerCn && issuerCn !== nextCn) {
+                                gapAfterIndex = i;
+                                break;
+                            }
+                        }
+                    }
+
                     certificates.forEach((cert, index) => {
-                        const indent = 26 + (index * 20); // 26px base indent to align with header
+                        // Add extra indent step for certs after a missing intermediate gap
+                        const gapOffset = (gapAfterIndex >= 0 && index > gapAfterIndex) ? 1 : 0;
+                        const indent = 26 + ((index + gapOffset) * 20); // 26px base indent to align with header
                         const isExpiredCert = new Date(cert.validUntil) < new Date();
                         const expiredDate = isExpiredCert ? new Date(cert.validUntil).toLocaleDateString() : '';
                         const certId = `cert-${index}`;
@@ -872,6 +889,18 @@
                         const arrow = index > 0 ? cornerArrowSvg : '';
                         const typeLabel = cert.type.replace(' Certificate', '');
 
+                        // Insert missing intermediate annotation before this cert if gap exists here
+                        if (gapAfterIndex >= 0 && index === gapAfterIndex + 1) {
+                            const gapIndent = 26 + ((gapAfterIndex + 1) * 20);
+                            const gapIssuerMatch = certificates[gapAfterIndex].issuer.match(/CN=([^,]+)/);
+                            const gapIssuerCn = gapIssuerMatch ? gapIssuerMatch[1].trim() : certificates[gapAfterIndex].issuer;
+                            chainHtml += `
+                                <div style="margin-left: ${gapIndent}px" class="flex items-center py-0.5 text-slate-700 dark:text-slate-300">
+                                    ${cornerArrowSvg}<span><span class="opacity-60">Intermediate:</span> <span class="font-medium">${gapIssuerCn}</span> <span class="text-amber-600 dark:text-amber-400 text-xs ml-1">(missing)</span></span>
+                                </div>
+                            `;
+                        }
+
                         chainHtml += `
                             <div style="margin-left: ${indent}px" class="flex items-center py-0.5">
                                 ${arrow}<a href="#${certId}" class="${linkClass} transition-colors"><span class="opacity-60">${typeLabel}:</span> <span class="${cnClass}">${cert.commonName}</span>${statusText}</a>
@@ -879,58 +908,17 @@
                         `;
                     });
 
-                    // If chain is incomplete (missing intermediate), show it
-                    if (isIncomplete) {
-                        if (certificates.length === 1) {
-                            // Single cert: show missing intermediate after leaf
-                            const leafCert = certificates[0];
-                            const issuerMatch = leafCert.issuer.match(/CN=([^,]+)/);
-                            const issuerCn = issuerMatch ? issuerMatch[1] : leafCert.issuer;
+                    // If chain is incomplete (missing intermediate) and only one cert, show it
+                    if (isIncomplete && certificates.length === 1) {
+                        const leafCert = certificates[0];
+                        const issuerMatch = leafCert.issuer.match(/CN=([^,]+)/);
+                        const issuerCn = issuerMatch ? issuerMatch[1] : leafCert.issuer;
 
-                            chainHtml += `
-                                <div style="margin-left: 46px" class="flex items-center py-0.5 text-slate-700 dark:text-slate-300">
-                                    ${cornerArrowSvg}<span><span class="opacity-60">Intermediate:</span> <span class="font-medium">${issuerCn}</span> <span class="text-amber-600 dark:text-amber-400 text-xs ml-1">(missing)</span></span>
-                                </div>
-                            `;
-                        } else {
-                            // Multiple certs: find the gap and insert missing intermediate
-                            // Look for where issuer of cert[i] doesn't match subject of cert[i+1]
-                            for (let i = 0; i < certificates.length - 1; i++) {
-                                const currentIssuer = certificates[i].issuer;
-                                // Build a comparable subject string from the next cert
-                                const nextCn = certificates[i + 1].commonName;
-                                // Check if the issuer CN contains the next cert's CN
-                                const issuerCnMatch = currentIssuer.match(/CN=([^,]+)/);
-                                const issuerCn = issuerCnMatch ? issuerCnMatch[1].trim() : '';
-
-                                if (issuerCn && issuerCn !== nextCn) {
-                                    // Gap found between cert[i] and cert[i+1]
-                                    const gapIndent = 26 + ((i + 1) * 20);
-                                    chainHtml = chainHtml.replace(
-                                        new RegExp(`(id="cert-${i + 1}")`),
-                                        `$1`
-                                    );
-                                    // Insert the missing intermediate annotation
-                                    // We need to rebuild: insert it after cert[i]'s div and before cert[i+1]'s div
-                                    const missingHtml = `
-                                        <div style="margin-left: ${gapIndent}px" class="flex items-center py-0.5 text-slate-700 dark:text-slate-300">
-                                            ${cornerArrowSvg}<span><span class="opacity-60">Intermediate:</span> <span class="font-medium">${issuerCn}</span> <span class="text-amber-600 dark:text-amber-400 text-xs ml-1">(missing)</span></span>
-                                        </div>
-                                    `;
-                                    // Find the position of the next cert entry and insert before it
-                                    const nextCertPattern = `<a href="#cert-${i + 1}"`;
-                                    const insertPos = chainHtml.lastIndexOf(nextCertPattern);
-                                    if (insertPos > -1) {
-                                        // Find the start of the div containing this cert entry
-                                        const divStart = chainHtml.lastIndexOf('<div style=', insertPos);
-                                        if (divStart > -1) {
-                                            chainHtml = chainHtml.slice(0, divStart) + missingHtml + chainHtml.slice(divStart);
-                                        }
-                                    }
-                                    break;
-                                }
-                            }
-                        }
+                        chainHtml += `
+                            <div style="margin-left: 46px" class="flex items-center py-0.5 text-slate-700 dark:text-slate-300">
+                                ${cornerArrowSvg}<span><span class="opacity-60">Intermediate:</span> <span class="font-medium">${issuerCn}</span> <span class="text-amber-600 dark:text-amber-400 text-xs ml-1">(missing)</span></span>
+                            </div>
+                        `;
                     }
 
                     // If no root in chain, infer from last cert's issuer (cross-signed scenario)
@@ -939,8 +927,8 @@
                         const rootCn = issuerMatch ? issuerMatch[1] : lastCert.issuer;
 
                         // Calculate indent: base 26 + (cert count * 20). 
-                        // If we showed a "missing intermediate" row (isIncomplete=true), we need to add another level of indent.
-                        const extraStep = isIncomplete ? 1 : 0;
+                        // If we showed a "missing intermediate" row, we need to add another level of indent.
+                        const extraStep = (isIncomplete ? 1 : 0) + (gapAfterIndex >= 0 ? 1 : 0);
                         const lastIndent = 26 + ((certificates.length + extraStep) * 20);
 
                         // Only show inferred root if it's different from the last cert's CN
@@ -2344,10 +2332,129 @@
         }
 
         /**
+         * Decrypts PKCS#8 encrypted keys using Web Crypto API as a fallback
+         * when node-forge cannot handle modern PBE schemes (e.g. PBES2 + PBKDF2/SHA-256 + AES-256-CBC).
+         * Manually parses the EncryptedPrivateKeyInfo ASN.1 structure.
+         */
+        async function decryptPkcs8WithWebCrypto(pemText, passphrase) {
+            // OID lookup tables
+            const PBES2_OID = '1.2.840.113549.1.5.13';
+            const PBKDF2_OID = '1.2.840.113549.1.5.12';
+            const PRF_OIDS = {
+                '1.2.840.113549.2.7': 'SHA-1',
+                '1.2.840.113549.2.9': 'SHA-256',
+                '1.2.840.113549.2.10': 'SHA-384',
+                '1.2.840.113549.2.11': 'SHA-512',
+            };
+            const ENC_OIDS = {
+                '2.16.840.1.101.3.4.1.2': { name: 'AES-CBC', keyLen: 16 },   // aes128-CBC
+                '2.16.840.1.101.3.4.1.22': { name: 'AES-CBC', keyLen: 24 },  // aes192-CBC
+                '2.16.840.1.101.3.4.1.42': { name: 'AES-CBC', keyLen: 32 },  // aes256-CBC
+            };
+
+            // Strip PEM headers and decode base64 to forge byte string
+            const b64 = pemText.replace(/-----[^-]+-----/g, '').replace(/[\r\n\s]/g, '');
+            const derBytes = forge.util.decode64(b64);
+
+            // Parse outermost EncryptedPrivateKeyInfo SEQUENCE
+            const asn1 = forge.asn1.fromDer(derBytes);
+            // asn1.value[0] = encryptionAlgorithm (AlgorithmIdentifier SEQUENCE)
+            // asn1.value[1] = encryptedData (OCTET STRING)
+            const algSeq = asn1.value[0];
+            const encryptedData = asn1.value[1];
+
+            // Read the top-level algorithm OID — must be id-PBES2
+            const topOid = forge.asn1.derToOid(algSeq.value[0].value);
+            if (topOid !== PBES2_OID) {
+                throw new Error('Unsupported PKCS#8 encryption scheme (OID: ' + topOid + '). Only PBES2 is supported by the fallback decoder.');
+            }
+
+            // Parse PBES2-params: SEQUENCE { keyDerivationFunc, encryptionScheme }
+            const pbes2Params = algSeq.value[1];
+            const kdfSeq = pbes2Params.value[0];  // keyDerivationFunc AlgorithmIdentifier
+            const encSeq = pbes2Params.value[1];  // encryptionScheme AlgorithmIdentifier
+
+            // Validate KDF is PBKDF2
+            const kdfOid = forge.asn1.derToOid(kdfSeq.value[0].value);
+            if (kdfOid !== PBKDF2_OID) {
+                throw new Error('Unsupported KDF (OID: ' + kdfOid + '). Only PBKDF2 is supported.');
+            }
+
+            // Parse PBKDF2-params: SEQUENCE { salt, iterationCount, [keyLength], prf }
+            const pbkdf2Params = kdfSeq.value[1];
+            const salt = pbkdf2Params.value[0].value; // OCTET STRING (forge byte string)
+            const iterations = forge.asn1.derToInteger(pbkdf2Params.value[1]); // INTEGER
+
+            // Find PRF — it may be at index 2 or 3 (keyLength is optional)
+            let prfHash = 'SHA-1'; // default per RFC 8018
+            for (let i = 2; i < pbkdf2Params.value.length; i++) {
+                const node = pbkdf2Params.value[i];
+                // PRF is a SEQUENCE containing an OID
+                if (node.type === forge.asn1.Type.SEQUENCE && node.value && node.value.length > 0) {
+                    const prfOid = forge.asn1.derToOid(node.value[0].value);
+                    if (PRF_OIDS[prfOid]) {
+                        prfHash = PRF_OIDS[prfOid];
+                    }
+                    break;
+                }
+            }
+
+            // Parse encryption scheme OID and IV
+            const encOid = forge.asn1.derToOid(encSeq.value[0].value);
+            const encInfo = ENC_OIDS[encOid];
+            if (!encInfo) {
+                throw new Error('Unsupported encryption algorithm (OID: ' + encOid + '). Supported: AES-128/192/256-CBC.');
+            }
+            const iv = encSeq.value[1].value; // OCTET STRING (forge byte string)
+
+            // Convert forge byte strings to Uint8Arrays for Web Crypto
+            const saltBytes = new Uint8Array(salt.length);
+            for (let i = 0; i < salt.length; i++) saltBytes[i] = salt.charCodeAt(i);
+
+            const ivBytes = new Uint8Array(iv.length);
+            for (let i = 0; i < iv.length; i++) ivBytes[i] = iv.charCodeAt(i);
+
+            const ciphertext = typeof encryptedData.value === 'string' ? encryptedData.value : forge.asn1.fromDer(encryptedData.value).value;
+            const ciphertextBytes = new Uint8Array(ciphertext.length);
+            for (let i = 0; i < ciphertext.length; i++) ciphertextBytes[i] = ciphertext.charCodeAt(i);
+
+            // Import passphrase as raw key material
+            const enc = new TextEncoder();
+            const passphraseKey = await crypto.subtle.importKey(
+                'raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']
+            );
+
+            // Derive AES key via PBKDF2
+            const derivedKey = await crypto.subtle.deriveKey(
+                { name: 'PBKDF2', salt: saltBytes, iterations: iterations, hash: prfHash },
+                passphraseKey,
+                { name: encInfo.name, length: encInfo.keyLen * 8 },
+                false,
+                ['decrypt']
+            );
+
+            // Decrypt the private key data
+            const decryptedBuffer = await crypto.subtle.decrypt(
+                { name: encInfo.name, iv: ivBytes },
+                derivedKey,
+                ciphertextBytes
+            );
+
+            // Convert decrypted ArrayBuffer to base64 PEM
+            const decryptedArray = new Uint8Array(decryptedBuffer);
+            let binary = '';
+            for (let i = 0; i < decryptedArray.length; i++) binary += String.fromCharCode(decryptedArray[i]);
+            const base64 = btoa(binary);
+            const lines = base64.match(/.{1,64}/g) || [];
+            return '-----BEGIN PRIVATE KEY-----\n' + lines.join('\n') + '\n-----END PRIVATE KEY-----';
+        }
+
+        /**
          * Decrypts an encrypted private key (PKCS#8, RSA, or EC format).
          * Supports AES, 3DES, and DES encryption algorithms.
+         * Falls back to Web Crypto API for modern PBES2 schemes unsupported by node-forge.
          */
-        function removePassword() {
+        async function removePassword() {
             const textAreaInput = document.getElementById('pemText').value.trim();
             const passphrase = document.getElementById('passphrase').value;
             const output = document.getElementById('removerOutput');
@@ -2370,17 +2477,40 @@
 
                 if (textAreaInput.includes('ENCRYPTED PRIVATE KEY')) {
                     // PKCS#8 encrypted format - supports RSA, ECC, and other key types
-                    const encryptedObj = forge.pki.encryptedPrivateKeyFromPem(textAreaInput);
-                    const decryptedAsn1 = forge.pki.decryptPrivateKeyInfo(encryptedObj, passphrase);
-                    if (!decryptedAsn1) throw new Error('Decryption failed. Check password or key format.');
+                    try {
+                        const encryptedObj = forge.pki.encryptedPrivateKeyFromPem(textAreaInput);
+                        const decryptedAsn1 = forge.pki.decryptPrivateKeyInfo(encryptedObj, passphrase);
+                        if (!decryptedAsn1) throw new Error('Decryption failed. Check password or key format.');
 
-                    // Convert decrypted ASN.1 to DER then to PEM (works for all key types including ECC)
-                    const der = forge.asn1.toDer(decryptedAsn1).getBytes();
-                    const base64 = forge.util.encode64(der);
+                        // Convert decrypted ASN.1 to DER then to PEM (works for all key types including ECC)
+                        const der = forge.asn1.toDer(decryptedAsn1).getBytes();
+                        const base64 = forge.util.encode64(der);
 
-                    // Format as PKCS#8 unencrypted PEM (works for RSA, ECC, etc.)
-                    const lines = base64.match(/.{1,64}/g) || [];
-                    unencryptedPem = '-----BEGIN PRIVATE KEY-----\n' + lines.join('\n') + '\n-----END PRIVATE KEY-----';
+                        // Format as PKCS#8 unencrypted PEM (works for RSA, ECC, etc.)
+                        const lines = base64.match(/.{1,64}/g) || [];
+                        unencryptedPem = '-----BEGIN PRIVATE KEY-----\n' + lines.join('\n') + '\n-----END PRIVATE KEY-----';
+                    } catch (forgeErr) {
+                        // Forge fails on modern PBE schemes (e.g. PBKDF2+SHA-256, AES-256-CBC)
+                        // Fall back to manual ASN.1 parsing + Web Crypto API
+                        if (forgeErr.message && (
+                            forgeErr.message.includes('PBE') ||
+                            forgeErr.message.includes('Unsupported OID') ||
+                            forgeErr.message.includes('Unknown OID') ||
+                            forgeErr.message.includes('Cannot read encrypted')
+                        )) {
+                            try {
+                                unencryptedPem = await decryptPkcs8WithWebCrypto(textAreaInput, passphrase);
+                            } catch (wcErr) {
+                                // If Web Crypto also fails, provide a clear error
+                                if (wcErr.name === 'OperationError') {
+                                    throw new Error('Decryption failed. The password is incorrect or the key is corrupted.');
+                                }
+                                throw wcErr;
+                            }
+                        } else {
+                            throw forgeErr;
+                        }
+                    }
 
                 } else if (textAreaInput.includes('RSA PRIVATE KEY')) {
                     // Traditional RSA encrypted format
