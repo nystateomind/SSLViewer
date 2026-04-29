@@ -319,7 +319,7 @@
                                     Password</label>
                                 <input type="password" id="passphrase"
                                     class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm form-input transition text-sm text-slate-900 dark:text-white"
-                                    placeholder="••••••••••">
+                                    placeholder="password">
                             </div>
                             <button id="remove-password-button" onclick="removePassword()"
                                 class="mt-4 sm:mt-0 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-semibold rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:ring-offset-slate-900 transition whitespace-nowrap text-sm">
@@ -663,6 +663,41 @@
             const sslyzeResultsContainer = document.getElementById('sslyze-results-container');
             const enhancedScanCheckbox = document.getElementById('enhanced-scan-checkbox');
 
+            // --- Enhanced Scan Queue ---
+            // Limits concurrent SSLyze scans from the client side to prevent
+            // overwhelming the server when multiple scans are triggered rapidly.
+            const scanQueue = {
+                maxConcurrent: 3,
+                running: 0,
+                queue: [],
+
+                enqueue(fn) {
+                    return new Promise((resolve, reject) => {
+                        const task = { fn, resolve, reject };
+                        if (this.running < this.maxConcurrent) {
+                            this._run(task);
+                        } else {
+                            this.queue.push(task);
+                        }
+                    });
+                },
+
+                async _run(task) {
+                    this.running++;
+                    try {
+                        const result = await task.fn();
+                        task.resolve(result);
+                    } catch (err) {
+                        task.reject(err);
+                    } finally {
+                        this.running--;
+                        if (this.queue.length > 0) {
+                            this._run(this.queue.shift());
+                        }
+                    }
+                }
+            };
+
             const handleVerify = async (e) => {
                 if (e) e.preventDefault();
                 resultsContainer.innerHTML = '';
@@ -727,7 +762,7 @@
                     if (runEnhancedScan) {
                         // Show loading banner for enhanced scan
                         renderScanStatusBanner('loading');
-                        runSslyzeScan(hostname, port);
+                        scanQueue.enqueue(() => runSslyzeScan(hostname, port));
                     }
 
                 } catch (err) {

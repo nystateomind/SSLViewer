@@ -31,7 +31,7 @@ function send_error($message, $statusCode = 400)
         header("Content-Type: application/json");
         http_response_code($statusCode);
     }
-    echo json_encode(['error' => $message, 'success' => false]);
+    echo json_encode(['error' => $message, 'success' => false], JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
 }
 
@@ -49,7 +49,7 @@ function send_json($data)
         header("Content-Type: application/json");
         http_response_code(200);
     }
-    echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
 }
 
@@ -112,6 +112,51 @@ try {
     if ($port <= 0 || $port > 65535) {
         throw new Exception('A valid port number (1-65535) is required.');
     }
+
+    // --- Concurrency Limiting ---
+    // Limit simultaneous SSLyze processes to prevent resource exhaustion.
+    // Each SSLyze scan blocks a worker for 30-120s; this prevents overload.
+    $maxConcurrentScans = 8; // Tune based on server RAM/CPU (each scan ~50-100MB)
+    $lockDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'sslyze_locks';
+    if (!is_dir($lockDir)) {
+        @mkdir($lockDir, 0755, true);
+    }
+
+    $lockHandle = null;
+    $waitStart = microtime(true);
+    $maxWaitTime = 60; // Max seconds to wait for a scan slot
+
+    // Try to acquire a scan slot using file locks
+    while (true) {
+        for ($i = 0; $i < $maxConcurrentScans; $i++) {
+            $lockFile = $lockDir . DIRECTORY_SEPARATOR . "scan_slot_{$i}.lock";
+            $handle = @fopen($lockFile, 'w');
+            if ($handle && flock($handle, LOCK_EX | LOCK_NB)) {
+                // Got a slot!
+                $lockHandle = $handle;
+                fwrite($lockHandle, getmypid() . "\n" . date('c'));
+                break 2;
+            }
+            if ($handle) {
+                fclose($handle);
+            }
+        }
+
+        // No slot available - check timeout
+        if ((microtime(true) - $waitStart) >= $maxWaitTime) {
+            send_error('Server is busy with other scans. Please try again in a moment.', 503);
+        }
+
+        usleep(500000); // Wait 500ms before retrying
+    }
+
+    // Release scan slot on shutdown (normal exit or error)
+    register_shutdown_function(function () use (&$lockHandle) {
+        if ($lockHandle) {
+            flock($lockHandle, LOCK_UN);
+            fclose($lockHandle);
+        }
+    });
 
     // Build the sslyze command with appropriate STARTTLS option
     $target = escapeshellarg("{$hostname}:{$port}");

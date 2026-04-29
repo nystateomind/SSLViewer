@@ -28,7 +28,12 @@ function send_error($message, $statusCode = 400)
     if (!headers_sent()) {
         http_response_code($statusCode);
     }
-    echo json_encode(['error' => $message]);
+    $json = json_encode(['error' => $message], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        echo '{"error": "Failed to encode error response to JSON."}';
+    } else {
+        echo $json;
+    }
     exit;
 }
 
@@ -920,7 +925,11 @@ try {
         'dnsRecords' => get_dns_records($hostname)
     ];
 
-    echo json_encode($responseData);
+    $json = json_encode($responseData, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        throw new Exception("Failed to encode certificate data to JSON: " . json_last_error_msg(), 500);
+    }
+    echo $json;
 
 } catch (Exception $e) {
     send_error($e->getMessage(), is_int($e->getCode()) && $e->getCode() !== 0 ? $e->getCode() : 400);

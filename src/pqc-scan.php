@@ -400,14 +400,14 @@ if (basename($_SERVER['PHP_SELF']) === 'pqc-scan.php') {
 
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         http_response_code(405);
-        echo json_encode(['error' => 'Method not allowed. Use POST.']);
+        echo json_encode(['error' => 'Method not allowed. Use POST.'], JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
 
     $input = json_decode(file_get_contents('php://input'), true);
     if (json_last_error() !== JSON_ERROR_NONE) {
         http_response_code(400);
-        echo json_encode(['error' => 'Invalid JSON in request body.']);
+        echo json_encode(['error' => 'Invalid JSON in request body.'], JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
 
@@ -416,12 +416,12 @@ if (basename($_SERVER['PHP_SELF']) === 'pqc-scan.php') {
 
     if (empty($hostname)) {
         http_response_code(400);
-        echo json_encode(['error' => 'Hostname is required.']);
+        echo json_encode(['error' => 'Hostname is required.'], JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
 
     $result = detectPqcSupport($hostname, $port);
     $result['securityCheck'] = createPqcSecurityCheck($result);
 
-    echo json_encode($result, JSON_PRETTY_PRINT);
+    echo json_encode($result, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE);
 }
