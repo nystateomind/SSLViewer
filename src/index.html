@@ -918,7 +918,7 @@
                             if (diffDays < 7) {
                                 colorClass = 'text-amber-600 dark:text-amber-400';
                             }
-                            statusText = ` <span class="text-xs font-normal ${colorClass}">(expires in ${diffDays} day${diffDays === 1 ? '' : 's'})</span>`;
+                            statusText = ` <span class="text-xs font-bold ${colorClass}">(expires in ${diffDays} day${diffDays === 1 ? '' : 's'})</span>`;
                         }
 
                         const arrow = index > 0 ? cornerArrowSvg : '';
