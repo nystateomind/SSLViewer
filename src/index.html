@@ -1659,10 +1659,11 @@
 
         // Fallback: Parse EC certificate using raw ASN.1
         function parseEcCertificateAsn1(pem) {
+            // Extract just the PEM block in case there's extra text
+            const match = pem.match(/-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/);
+            if (!match) throw new Error("No valid certificate block found.");
             // Extract base64 content
-            const base64 = pem.replace(/-----BEGIN CERTIFICATE-----/, '')
-                .replace(/-----END CERTIFICATE-----/, '')
-                .replace(/[\r\n\s]/g, '');
+            const base64 = match[1].replace(/[\r\n\s]/g, '');
             const derBytes = forge.util.decode64(base64);
             const asn1 = forge.asn1.fromDer(forge.util.createBuffer(derBytes));
 
@@ -1742,10 +1743,11 @@
 
         // Fallback: Parse EC CSR using raw ASN.1
         function parseEcCsrAsn1(pem) {
+            // Extract just the PEM block in case there's extra text
+            const match = pem.match(/-----BEGIN CERTIFICATE REQUEST-----([\s\S]*?)-----END CERTIFICATE REQUEST-----/);
+            if (!match) throw new Error("No valid CSR block found.");
             // Extract base64 content
-            const base64 = pem.replace(/-----BEGIN CERTIFICATE REQUEST-----/, '')
-                .replace(/-----END CERTIFICATE REQUEST-----/, '')
-                .replace(/[\r\n\s]/g, '');
+            const base64 = match[1].replace(/[\r\n\s]/g, '');
             const derBytes = forge.util.decode64(base64);
             const asn1 = forge.asn1.fromDer(forge.util.createBuffer(derBytes));
 
@@ -1964,6 +1966,8 @@
             }
 
             if (pem.includes('-----BEGIN CERTIFICATE REQUEST-----')) {
+                const match = pem.match(/-----BEGIN CERTIFICATE REQUEST-----[\s\S]*?-----END CERTIFICATE REQUEST-----/);
+                if (match) pem = match[0];
                 decodeCsr(pem);
                 return;
             }
@@ -1988,6 +1992,9 @@
                 pem = pem.replace(/-----(BEGIN|END) CERTIFICATE-----/g, '').replace(/[\r\n\s]/g, '');
                 pem = pem.match(/.{1,64}/g).join('\n');
                 pem = '-----BEGIN CERTIFICATE-----\n' + pem + '\n-----END CERTIFICATE-----';
+            } else {
+                const match = pem.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/);
+                if (match) pem = match[0];
             }
 
             try {
@@ -2388,7 +2395,9 @@
             };
 
             // Strip PEM headers and decode base64 to forge byte string
-            const b64 = pemText.replace(/-----[^-]+-----/g, '').replace(/[\r\n\s]/g, '');
+            const match = pemText.match(/-----BEGIN [^-]+-----([\s\S]*?)-----END [^-]+-----/);
+            if (!match) throw new Error("No PEM block found");
+            const b64 = match[1].replace(/[\r\n\s]/g, '');
             const derBytes = forge.util.decode64(b64);
 
             // Parse outermost EncryptedPrivateKeyInfo SEQUENCE
@@ -2532,10 +2541,17 @@
             try {
                 let unencryptedPem = null;
 
-                if (textAreaInput.includes('ENCRYPTED PRIVATE KEY')) {
+                // Extract cleanly just the PEM block to ignore Bag Attributes or other extra text
+                const pemMatch = textAreaInput.match(/-----BEGIN [^-]+-----[\s\S]*?-----END [^-]+-----/);
+                let cleanPem = textAreaInput;
+                if (pemMatch) {
+                    cleanPem = pemMatch[0];
+                }
+
+                if (cleanPem.includes('ENCRYPTED PRIVATE KEY')) {
                     // PKCS#8 encrypted format - supports RSA, ECC, and other key types
                     try {
-                        const encryptedObj = forge.pki.encryptedPrivateKeyFromPem(textAreaInput);
+                        const encryptedObj = forge.pki.encryptedPrivateKeyFromPem(cleanPem);
                         const decryptedAsn1 = forge.pki.decryptPrivateKeyInfo(encryptedObj, passphrase);
                         if (!decryptedAsn1) throw new Error('Decryption failed. Check password or key format.');
 
@@ -2569,15 +2585,15 @@
                         }
                     }
 
-                } else if (textAreaInput.includes('RSA PRIVATE KEY')) {
+                } else if (cleanPem.includes('RSA PRIVATE KEY')) {
                     // Traditional RSA encrypted format
-                    const privateKey = forge.pki.decryptRsaPrivateKey(textAreaInput, passphrase);
+                    const privateKey = forge.pki.decryptRsaPrivateKey(cleanPem, passphrase);
                     if (!privateKey) throw new Error('Invalid RSA password or corrupted key.');
                     unencryptedPem = forge.pki.privateKeyToPem(privateKey);
 
-                } else if (textAreaInput.includes('EC PRIVATE KEY')) {
+                } else if (cleanPem.includes('EC PRIVATE KEY')) {
                     // Traditional OpenSSL encrypted EC key format
-                    const lines = textAreaInput.split(/\r?\n/);
+                    const lines = cleanPem.split(/\r?\n/);
                     let dekInfo = null;
                     let base64Start = 0;
 
