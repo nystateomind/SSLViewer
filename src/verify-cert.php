@@ -692,6 +692,21 @@ try {
         }
         $publicKeyString = sprintf('%s (%d bits)', $keyTypeStr, $keyBits);
 
+        $sha256Fingerprint = openssl_x509_fingerprint($certResource, 'sha256');
+        $sha1Fingerprint = openssl_x509_fingerprint($certResource, 'sha1');
+        
+        if ($sha256Fingerprint) {
+            $sha256Fingerprint = implode(':', str_split(strtoupper($sha256Fingerprint), 2));
+        } else {
+            $sha256Fingerprint = 'N/A';
+        }
+        
+        if ($sha1Fingerprint) {
+            $sha1Fingerprint = implode(':', str_split(strtoupper($sha1Fingerprint), 2));
+        } else {
+            $sha1Fingerprint = 'N/A';
+        }
+
         $certificates[] = [
             'type' => $type,
             'pem' => $pemCert, // Include raw PEM for download
@@ -705,6 +720,8 @@ try {
             'publicKey' => $publicKeyString,
             'issuer' => isset($certInfo['issuer']) ? format_distinguished_name($certInfo['issuer']) : 'N/A',
             'signatureAlgorithm' => $certInfo['signatureTypeSN'] ?? 'N/A',
+            'fingerprintSha256' => $sha256Fingerprint,
+            'fingerprintSha1' => $sha1Fingerprint,
         ];
         $isLeaf = false;
     }

@@ -941,6 +941,14 @@
                                 ${arrow}<a href="#${certId}" class="${linkClass} transition-colors"><span class="opacity-60">${typeLabel}:</span> <span class="${cnClass}">${cert.commonName}</span>${statusText}</a>
                             </div>
                         `;
+                        
+                        if (index === 0 && cert.fingerprintSha256 && cert.fingerprintSha256 !== 'N/A') {
+                            chainHtml += `
+                                <div style="margin-left: ${indent}px" class="text-[11px] text-slate-400 dark:text-slate-500 font-mono mt-0.5 mb-1.5 opacity-70">
+                                    SHA-256: ${cert.fingerprintSha256}
+                                </div>
+                            `;
+                        }
                     });
 
                     // If chain is incomplete (missing intermediate) and only one cert, show it
