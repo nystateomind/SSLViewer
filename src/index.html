@@ -1241,7 +1241,11 @@
                     dl.appendChild(createDetailRow('Issuer', cert.issuer));
                     dl.appendChild(createDetailRow('Signature Algorithm', cert.signatureAlgorithm));
                     if (isLeaf && cert.fingerprintSha256 && cert.fingerprintSha256 !== 'N/A') {
-                        dl.appendChild(createDetailRow('Fingerprint (SHA-256)', `<span class="font-mono text-xs break-all">${cert.fingerprintSha256}</span>`));
+                        const fingerprintHTML = `<span class="font-mono text-xs break-all">${cert.fingerprintSha256}</span>`
+                            + (cert.fingerprintSha1 && cert.fingerprintSha1 !== 'N/A'
+                                ? ` <br> <span class="text-slate-500 dark:text-slate-400 font-mono text-xs break-all">(SHA-1: ${cert.fingerprintSha1})</span>`
+                                : '');
+                        dl.appendChild(createDetailRow('Fingerprint (SHA-256)', fingerprintHTML));
                     }
 
                     container.appendChild(cardNode);
