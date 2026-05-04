@@ -944,8 +944,8 @@
                         
                         if (index === 0 && cert.fingerprintSha256 && cert.fingerprintSha256 !== 'N/A') {
                             chainHtml += `
-                                <div style="margin-left: ${indent}px" class="text-[11px] text-slate-400 dark:text-slate-500 font-mono mt-0.5 mb-1.5 opacity-70">
-                                    SHA-256: ${cert.fingerprintSha256}
+                                <div style="margin-left: ${indent}px" class="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 mb-1.5 leading-snug break-all">
+                                    <span class="text-slate-400 dark:text-slate-500 not-italic font-sans">SHA-256</span> ${cert.fingerprintSha256}
                                 </div>
                             `;
                         }
