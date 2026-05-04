@@ -942,13 +942,7 @@
                             </div>
                         `;
                         
-                        if (index === 0 && cert.fingerprintSha256 && cert.fingerprintSha256 !== 'N/A') {
-                            chainHtml += `
-                                <div style="margin-left: ${indent}px" class="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 mb-1.5 leading-snug break-all">
-                                    <span class="text-slate-400 dark:text-slate-500 not-italic font-sans">SHA-256</span> ${cert.fingerprintSha256}
-                                </div>
-                            `;
-                        }
+
                     });
 
                     // If chain is incomplete (missing intermediate) and only one cert, show it
@@ -1246,6 +1240,9 @@
                     dl.appendChild(createDetailRow('Public Key', cert.publicKey));
                     dl.appendChild(createDetailRow('Issuer', cert.issuer));
                     dl.appendChild(createDetailRow('Signature Algorithm', cert.signatureAlgorithm));
+                    if (isLeaf && cert.fingerprintSha256 && cert.fingerprintSha256 !== 'N/A') {
+                        dl.appendChild(createDetailRow('Fingerprint (SHA-256)', `<span class="font-mono text-xs break-all">${cert.fingerprintSha256}</span>`));
+                    }
 
                     container.appendChild(cardNode);
                 });
