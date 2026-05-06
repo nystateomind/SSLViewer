@@ -696,13 +696,13 @@ try {
         $sha1Fingerprint = openssl_x509_fingerprint($certResource, 'sha1');
         
         if ($sha256Fingerprint) {
-            $sha256Fingerprint = implode(':', str_split(strtoupper($sha256Fingerprint), 2));
+            $sha256Fingerprint = strtoupper($sha256Fingerprint);
         } else {
             $sha256Fingerprint = 'N/A';
         }
         
         if ($sha1Fingerprint) {
-            $sha1Fingerprint = implode(':', str_split(strtoupper($sha1Fingerprint), 2));
+            $sha1Fingerprint = strtoupper($sha1Fingerprint);
         } else {
             $sha1Fingerprint = 'N/A';
         }
