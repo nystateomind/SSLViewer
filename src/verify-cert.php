@@ -331,15 +331,14 @@ try {
         // script that uses ssl.MemoryBIO to perform the TDS-wrapped handshake.
         $pyScript = __DIR__ . DIRECTORY_SEPARATOR . 'mssql-cert.py';
         if (!file_exists($pyScript)) {
-            throw new Exception("MSSQL certificate helper script not found.", 500);
+            throw new Exception("MSSQL certificate helper script not found at: {$pyScript}", 500);
         }
 
         // Find a working Python 3 binary
         $pythonBin = null;
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-            // On Windows, try 'python' first (most common), then 'py -3', then 'python3'
             foreach (['python', 'py', 'python3'] as $candidate) {
-                $ver = @shell_exec(escapeshellarg($candidate) . ' --version 2>&1');
+                $ver = @shell_exec("{$candidate} --version 2>&1");
                 if ($ver && stripos($ver, 'python 3') !== false) {
                     $pythonBin = $candidate;
                     break;
@@ -347,7 +346,7 @@ try {
             }
         } else {
             foreach (['python3', 'python'] as $candidate) {
-                $ver = @shell_exec($candidate . ' --version 2>&1');
+                $ver = @shell_exec("{$candidate} --version 2>&1");
                 if ($ver && stripos($ver, 'python 3') !== false) {
                     $pythonBin = $candidate;
                     break;
@@ -359,11 +358,10 @@ try {
             throw new Exception("Python 3 is required for MSSQL certificate scanning but was not found in PATH.", 500);
         }
 
-        $command = escapeshellarg($pythonBin) . ' '
-                 . escapeshellarg($pyScript) . ' '
+        // Build command without 2>&1 — proc_open captures stderr on pipe 2
+        $command = "{$pythonBin} " . escapeshellarg($pyScript) . ' '
                  . escapeshellarg($hostname) . ' '
-                 . escapeshellarg((string) $port)
-                 . ' 2>&1';
+                 . escapeshellarg((string) $port);
 
         $descriptorSpec = [
             0 => ["pipe", "r"],
@@ -373,7 +371,7 @@ try {
 
         $process = proc_open($command, $descriptorSpec, $pipes, null, null);
         if (!is_resource($process)) {
-            throw new Exception("Failed to start the MSSQL certificate helper process.", 500);
+            throw new Exception("Failed to start MSSQL helper. Command: {$command}", 500);
         }
 
         fclose($pipes[0]);
@@ -382,7 +380,7 @@ try {
 
         $output = '';
         $error_output = '';
-        $timeout = 15; // Allow extra time for TDS handshake
+        $timeout = 15;
         $startTime = time();
 
         while (true) {
@@ -417,18 +415,16 @@ try {
         fclose($pipes[2]);
         $exitCode = proc_close($process);
 
-        // Combine stdout and stderr (command uses 2>&1) and check for PEM cert
-        $combinedOutput = $output . $error_output;
-
-        if (strpos($combinedOutput, '-----BEGIN CERTIFICATE-----') === false) {
-            $errMsg = trim($error_output ?: $output);
-            if (empty($errMsg)) {
-                $errMsg = "No output received (exit code: {$exitCode})";
+        if (strpos($output, '-----BEGIN CERTIFICATE-----') === false) {
+            // Surface the actual Python error for debugging
+            $errDetail = trim($error_output ?: $output);
+            if (empty($errDetail)) {
+                $errDetail = "No output (exit code {$exitCode})";
             }
-            throw new Exception("Failed to retrieve MSSQL certificate: {$errMsg}", 500);
+            throw new Exception("MSSQL certificate retrieval failed: {$errDetail}", 500);
         }
 
-        $rawCerts = parse_pem_certs($combinedOutput);
+        $rawCerts = parse_pem_certs($output);
         if (empty($rawCerts)) {
             throw new Exception("Connected to MSSQL server, but could not parse certificates from the response.", 500);
         }
