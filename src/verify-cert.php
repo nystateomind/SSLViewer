@@ -324,14 +324,46 @@ try {
     // because openssl s_client does not support -starttls mssql.
 
     if ($isMssql) {
-        // --- MSSQL: Direct TLS via openssl s_client (no STARTTLS needed) ---
-        // SQL Server on port 1433 accepts direct TLS connections (like HTTPS).
-        // We skip cURL (which would try HTTP over the TLS connection) and use
-        // openssl s_client directly, without any -starttls flag.
-        $helpOutput = shell_exec('openssl s_client -help 2>&1');
-        $legacyFlag = (strpos($helpOutput, '-legacy_renegotiation') !== false) ? ' -legacy_renegotiation' : '';
+        // --- MSSQL: TDS-framed TLS via Python helper ---
+        // SQL Server requires the TLS handshake to be wrapped inside TDS packets
+        // (type 0x12) after the PRELOGIN exchange. Neither openssl s_client nor
+        // PHP's stream_socket_enable_crypto can do this. We shell out to a Python
+        // script that uses ssl.MemoryBIO to perform the TDS-wrapped handshake.
+        $pyScript = __DIR__ . DIRECTORY_SEPARATOR . 'mssql-cert.py';
+        if (!file_exists($pyScript)) {
+            throw new Exception("MSSQL certificate helper script not found.", 500);
+        }
 
-        $command = "openssl s_client{$legacyFlag} -showcerts -connect " . escapeshellarg("$hostname:$port");
+        // Find a working Python 3 binary
+        $pythonBin = null;
+        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            // On Windows, try 'python' first (most common), then 'py -3', then 'python3'
+            foreach (['python', 'py', 'python3'] as $candidate) {
+                $ver = @shell_exec(escapeshellarg($candidate) . ' --version 2>&1');
+                if ($ver && stripos($ver, 'python 3') !== false) {
+                    $pythonBin = $candidate;
+                    break;
+                }
+            }
+        } else {
+            foreach (['python3', 'python'] as $candidate) {
+                $ver = @shell_exec($candidate . ' --version 2>&1');
+                if ($ver && stripos($ver, 'python 3') !== false) {
+                    $pythonBin = $candidate;
+                    break;
+                }
+            }
+        }
+
+        if (!$pythonBin) {
+            throw new Exception("Python 3 is required for MSSQL certificate scanning but was not found in PATH.", 500);
+        }
+
+        $command = escapeshellarg($pythonBin) . ' '
+                 . escapeshellarg($pyScript) . ' '
+                 . escapeshellarg($hostname) . ' '
+                 . escapeshellarg((string) $port)
+                 . ' 2>&1';
 
         $descriptorSpec = [
             0 => ["pipe", "r"],
@@ -341,7 +373,7 @@ try {
 
         $process = proc_open($command, $descriptorSpec, $pipes, null, null);
         if (!is_resource($process)) {
-            throw new Exception("Failed to create the OpenSSL process.", 500);
+            throw new Exception("Failed to start the MSSQL certificate helper process.", 500);
         }
 
         fclose($pipes[0]);
@@ -350,7 +382,7 @@ try {
 
         $output = '';
         $error_output = '';
-        $timeout = 10;
+        $timeout = 15; // Allow extra time for TDS handshake
         $startTime = time();
 
         while (true) {
@@ -375,7 +407,7 @@ try {
                 fclose($pipes[1]);
                 fclose($pipes[2]);
                 proc_close($process);
-                throw new Exception("Connection to MSSQL server timed out (10 second limit).", 500);
+                throw new Exception("MSSQL certificate retrieval timed out (15 second limit).", 500);
             }
 
             if (!$status['running'] && feof($pipes[1]) && feof($pipes[2])) break;
@@ -383,26 +415,28 @@ try {
 
         fclose($pipes[1]);
         fclose($pipes[2]);
-        proc_close($process);
+        $exitCode = proc_close($process);
 
-        if (strpos($output, '-----BEGIN CERTIFICATE-----') === false) {
-            if (strpos($error_output, 'unsafe legacy renegotiation disabled') !== false) {
-                throw new Exception("Connection failed: Unsafe legacy renegotiation disabled.", 500);
+        // Combine stdout and stderr (command uses 2>&1) and check for PEM cert
+        $combinedOutput = $output . $error_output;
+
+        if (strpos($combinedOutput, '-----BEGIN CERTIFICATE-----') === false) {
+            $errMsg = trim($error_output ?: $output);
+            if (empty($errMsg)) {
+                $errMsg = "No output received (exit code: {$exitCode})";
             }
-            throw new Exception("Failed to retrieve certificate from MSSQL server. Verify the host and port are correct.", 500);
+            throw new Exception("Failed to retrieve MSSQL certificate: {$errMsg}", 500);
         }
 
-        $rawCerts = parse_pem_certs($output);
+        $rawCerts = parse_pem_certs($combinedOutput);
         if (empty($rawCerts)) {
             throw new Exception("Connected to MSSQL server, but could not parse certificates from the response.", 500);
         }
 
-        // Extract connected IP from OpenSSL output
-        if (preg_match('/^Connecting to ([0-9a-f.:]+)/mi', $error_output, $ipMatches)) {
-            $connectedIp = $ipMatches[1];
-        } else {
-            $connectedIp = gethostbyname($hostname);
-            if ($connectedIp === $hostname) $connectedIp = null;
+        // Resolve IP for display
+        $connectedIp = gethostbyname($hostname);
+        if ($connectedIp === $hostname) {
+            $connectedIp = null;
         }
 
     } elseif ($starttlsProtocol !== null) {
