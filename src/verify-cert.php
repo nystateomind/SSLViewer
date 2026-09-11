@@ -312,17 +312,125 @@ try {
 
     // Determine if we need STARTTLS for specific protocols
     $starttlsProtocol = null;
+    $isMssql = ($port === 1433);
     if ($port === 5432) {
         $starttlsProtocol = 'postgres';
     } elseif ($port === 25 || $port === 587 || $port === 25587) {
         $starttlsProtocol = 'smtp';
     } elseif ($port === 21) {
         $starttlsProtocol = 'ftp';
-    } elseif ($port === 1433) {
-        $starttlsProtocol = 'mssql';
     }
+    // Note: MSSQL (port 1433) is handled separately below via native PHP sockets
+    // because openssl s_client does not support -starttls mssql.
 
-    if ($starttlsProtocol !== null) {
+    if ($isMssql) {
+        // --- MSSQL TDS Prelogin + TLS via native PHP sockets ---
+        // openssl s_client has no -starttls mssql; we do the TDS handshake ourselves.
+        $errno  = 0;
+        $errstr = '';
+        $sock = @fsockopen($hostname, $port, $errno, $errstr, 10);
+        if (!$sock) {
+            throw new Exception("Could not connect to {$hostname}:{$port} — {$errstr} (errno {$errno})", 500);
+        }
+        stream_set_timeout($sock, 10);
+
+        // Build TDS PRELOGIN packet requesting encryption (ENCRYPT_ON = 0x01)
+        // Body layout: VERSION option (5 bytes) + ENCRYPTION option (5 bytes) + TERMINATOR (1 byte)
+        //              + VERSION data (6 bytes) + ENCRYPTION data (1 byte) = 18 bytes body
+        // Offsets are relative to start of the PRELOGIN body (not the 8-byte packet header)
+        $preloginBody = pack('C*',
+            0x00,       // Option token: VERSION
+            0x00, 0x0B, // Offset to VERSION data within body = 11
+            0x00, 0x06, // LENGTH of VERSION data = 6
+            0x01,       // Option token: ENCRYPTION
+            0x00, 0x11, // Offset to ENCRYPTION data within body = 17
+            0x00, 0x01, // LENGTH of ENCRYPTION data = 1
+            0xFF,       // TERMINATOR
+            0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, // VERSION data: 10.0.0.0 (SQL Server 2008 style)
+            0x01        // ENCRYPTION data: 0x01 = ENCRYPT_ON
+        );
+        $totalLen = 8 + strlen($preloginBody); // 8-byte packet header + body
+        $preloginPacket = pack('CCnCCCC',
+            0x12,           // Type: PRELOGIN
+            0x01,           // Status: EOM (End of Message)
+            $totalLen,      // Total packet length (big-endian)
+            0x00, 0x00,     // SPID
+            0x01,           // PacketID
+            0x00            // Window
+        ) . $preloginBody;
+
+        fwrite($sock, $preloginPacket);
+
+        // Read the server's PRELOGIN response (at least the 8-byte header)
+        $responseHeader = '';
+        $deadline = time() + 10;
+        while (strlen($responseHeader) < 8 && time() < $deadline) {
+            $chunk = fread($sock, 8 - strlen($responseHeader));
+            if ($chunk === false || $chunk === '') break;
+            $responseHeader .= $chunk;
+        }
+        if (strlen($responseHeader) < 8) {
+            fclose($sock);
+            throw new Exception("MSSQL server did not send a valid PRELOGIN response.", 500);
+        }
+        // Bytes 2-3 (big-endian) = total packet length; read the remainder of the body
+        $respLen = (ord($responseHeader[2]) << 8) | ord($responseHeader[3]);
+        $bodyLen = max(0, $respLen - 8);
+        $responseBody = '';
+        while (strlen($responseBody) < $bodyLen && time() < $deadline) {
+            $chunk = fread($sock, $bodyLen - strlen($responseBody));
+            if ($chunk === false || $chunk === '') break;
+            $responseBody .= $chunk;
+        }
+
+        // Upgrade the plain socket to TLS so we can capture the certificate chain
+        stream_set_blocking($sock, true);
+        $context = stream_context_create([
+            'ssl' => [
+                'verify_peer'       => false,
+                'verify_peer_name'  => false,
+                'capture_peer_cert_chain' => true,
+                'allow_self_signed' => true,
+            ]
+        ]);
+        stream_context_set_option($sock, stream_context_get_options($context));
+        $tlsOk = @stream_socket_enable_crypto($sock, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+        if (!$tlsOk) {
+            fclose($sock);
+            throw new Exception("TLS handshake with MSSQL server failed. The server may not have TLS enabled, or the certificate is incompatible.", 500);
+        }
+
+        // Extract the peer certificate chain from the stream context
+        $params = stream_context_get_params($sock);
+        $certChain = $params['options']['ssl']['peer_certificate_chain'] ?? [];
+        if (empty($certChain) && isset($params['options']['ssl']['peer_certificate'])) {
+            $certChain = [$params['options']['ssl']['peer_certificate']];
+        }
+        fclose($sock);
+
+        if (empty($certChain)) {
+            throw new Exception("Connected to MSSQL server but could not retrieve the certificate chain.", 500);
+        }
+
+        foreach ($certChain as $certResource) {
+            $pem = '';
+            openssl_x509_export($certResource, $pem);
+            if (!empty(trim($pem))) {
+                $rawCerts[] = $pem;
+            }
+        }
+
+        if (empty($rawCerts)) {
+            throw new Exception("Connected to MSSQL server but failed to export any certificates.", 500);
+        }
+
+        // Resolve the IP for display purposes
+        $connectedIp = gethostbyname($hostname);
+        if ($connectedIp === $hostname) {
+            $connectedIp = null;
+        }
+
+    } elseif ($starttlsProtocol !== null) {
         // --- Check for Legacy Renegotiation Support ---
         $helpOutput = shell_exec('openssl s_client -help 2>&1');
         $legacyFlag = (strpos($helpOutput, '-legacy_renegotiation') !== false) ? ' -legacy_renegotiation' : '';
@@ -420,7 +528,7 @@ try {
             $connectedIp = $ipMatches[1];
         }
 
-    } else {
+    } else { // Standard HTTPS / direct TLS
         // --- Use cURL for standard HTTPS ---
         if (!function_exists('curl_init')) {
             throw new Exception('The cURL extension is not installed or enabled on this server.', 500);
