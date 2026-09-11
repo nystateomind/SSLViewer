@@ -387,7 +387,13 @@ try {
         stream_set_blocking($sock, true);
         stream_set_timeout($sock, 10);
 
-        $tlsOk = @stream_socket_enable_crypto($sock, true, STREAM_CRYPTO_METHOD_ANY_CLIENT);
+        // stream_socket_enable_crypto() can return 0 on Windows when the TLS
+        // handshake needs more round-trips. Retry in a loop until true/false.
+        $tlsOk = 0;
+        $tlsDeadline = time() + 10;
+        while ($tlsOk === 0 && time() < $tlsDeadline) {
+            $tlsOk = @stream_socket_enable_crypto($sock, true, STREAM_CRYPTO_METHOD_ANY_CLIENT);
+        }
 
         if ($tlsOk === true) {
             // Direct TLS succeeded (Force Encryption mode)
@@ -459,7 +465,12 @@ try {
                 $respBody .= $chunk;
             }
 
-            $tls2Ok = @stream_socket_enable_crypto($sock2, true, STREAM_CRYPTO_METHOD_ANY_CLIENT);
+            // Retry loop for Windows: stream_socket_enable_crypto returns 0 while in progress
+            $tls2Ok = 0;
+            $tls2Deadline = time() + 10;
+            while ($tls2Ok === 0 && time() < $tls2Deadline) {
+                $tls2Ok = @stream_socket_enable_crypto($sock2, true, STREAM_CRYPTO_METHOD_ANY_CLIENT);
+            }
             if ($tls2Ok !== true) {
                 $preloginTlsErr = $collectOpensslErrors();
                 fclose($sock2);
