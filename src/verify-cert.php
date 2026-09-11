@@ -324,13 +324,18 @@ try {
     // because openssl s_client does not support -starttls mssql.
 
     if ($isMssql) {
-        // --- MSSQL TDS Prelogin + TLS via native PHP sockets ---
-        // openssl s_client has no -starttls mssql; we perform the TDS prelogin ourselves.
+        // --- MSSQL cert retrieval via native PHP sockets ---
         //
-        // IMPORTANT: The SSL context MUST be attached to the stream at creation time
-        // (via stream_socket_client) so that stream_socket_enable_crypto() can find it
-        // and capture_peer_cert_chain is honoured during the handshake.
-        // fsockopen() does not accept a stream context, so it cannot be used here.
+        // SQL Server supports two TLS negotiation modes depending on configuration:
+        //   1. Direct TLS  - server has "Force Encryption" enabled; TLS ClientHello
+        //      is sent immediately after TCP connect (no TDS prelogin needed).
+        //      This is what ssl.wrap_socket() in Python does, and what we try first.
+        //   2. TDS Prelogin - client sends a TDS PRELOGIN packet requesting ENCRYPT_ON,
+        //      server responds, then TLS handshake begins. Required for older/default configs.
+        //
+        // The SSL context must be attached at stream creation time so that
+        // stream_socket_enable_crypto() sees capture_peer_cert_chain.
+
         $sslContext = stream_context_create([
             'ssl' => [
                 'verify_peer'             => false,
@@ -343,6 +348,33 @@ try {
             ]
         ]);
 
+        $collectOpensslErrors = function() {
+            $msgs = [];
+            while (($e = openssl_error_string()) !== false) {
+                $msgs[] = $e;
+            }
+            return implode('; ', $msgs);
+        };
+
+        $extractCertsFromStream = function($stream) {
+            $params = stream_context_get_params($stream);
+            $chain  = $params['options']['ssl']['peer_certificate_chain'] ?? [];
+            if (empty($chain) && isset($params['options']['ssl']['peer_certificate'])) {
+                $chain = [$params['options']['ssl']['peer_certificate']];
+            }
+            $pems = [];
+            foreach ($chain as $res) {
+                $pem = '';
+                openssl_x509_export($res, $pem);
+                if (!empty(trim($pem))) {
+                    $pems[] = $pem;
+                }
+            }
+            return $pems;
+        };
+
+        // Attempt 1: Direct TLS (matches Python ssl.wrap_socket approach).
+        // Works when SQL Server has Force Encryption enabled.
         $sock = @stream_socket_client(
             "tcp://{$hostname}:{$port}",
             $errno, $errstr, 10,
@@ -350,104 +382,103 @@ try {
             $sslContext
         );
         if (!$sock) {
-            throw new Exception("Could not connect to {$hostname}:{$port} — {$errstr} (errno {$errno})", 500);
+            throw new Exception("Could not connect to {$hostname}:{$port} - {$errstr} (errno {$errno}). Verify the host is reachable and SQL Server is running.", 500);
         }
-        stream_set_timeout($sock, 10);
         stream_set_blocking($sock, true);
+        stream_set_timeout($sock, 10);
 
-        // Build TDS PRELOGIN packet requesting ENCRYPT_ON (0x01).
-        // Body layout (offsets relative to start of body, i.e. after the 8-byte packet header):
-        //   [0]     VERSION  token  (0x00)
-        //   [1-2]   VERSION  data offset = 11 (0x000B)
-        //   [3-4]   VERSION  data length = 6  (0x0006)
-        //   [5]     ENCRYPTION token (0x01)
-        //   [6-7]   ENCRYPTION data offset = 17 (0x0011)
-        //   [8-9]   ENCRYPTION data length = 1  (0x0001)
-        //   [10]    TERMINATOR (0xFF)
-        //   [11-16] VERSION data:   10.0.0.0.0.0  (SQL Server 2008+)
-        //   [17]    ENCRYPTION data: 0x01 = ENCRYPT_ON
-        $preloginBody = pack('C*',
-            0x00, 0x00, 0x0B, 0x00, 0x06,   // VERSION option + offset + length
-            0x01, 0x00, 0x11, 0x00, 0x01,   // ENCRYPTION option + offset + length
-            0xFF,                            // TERMINATOR
-            0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, // VERSION data
-            0x01                             // ENCRYPTION: ENCRYPT_ON
-        );
-        $totalLen = 8 + strlen($preloginBody);
-        $preloginPacket =
-            pack('CC', 0x12, 0x01) .   // Type: PRELOGIN, Status: EOM
-            pack('n',  $totalLen)   .   // Total length (big-endian uint16)
-            pack('CC', 0x00, 0x00)  .   // SPID
-            pack('CC', 0x01, 0x00)  .   // PacketID, Window
-            $preloginBody;
-
-        if (fwrite($sock, $preloginPacket) === false) {
-            fclose($sock);
-            throw new Exception("Failed to send TDS PRELOGIN packet to {$hostname}:{$port}.", 500);
-        }
-
-        // Read the 8-byte TDS response header
-        $responseHeader = '';
-        $deadline = time() + 10;
-        while (strlen($responseHeader) < 8 && time() < $deadline) {
-            $chunk = fread($sock, 8 - strlen($responseHeader));
-            if ($chunk === false || $chunk === '') break;
-            $responseHeader .= $chunk;
-        }
-        if (strlen($responseHeader) < 8) {
-            fclose($sock);
-            throw new Exception("MSSQL server did not return a valid PRELOGIN response header. The server may not be running or may not support TLS.", 500);
-        }
-        // Drain the rest of the PRELOGIN response body before starting TLS
-        $respLen = (ord($responseHeader[2]) << 8) | ord($responseHeader[3]);
-        $bodyLen = max(0, $respLen - 8);
-        $responseBody = '';
-        while (strlen($responseBody) < $bodyLen && time() < $deadline) {
-            $chunk = fread($sock, $bodyLen - strlen($responseBody));
-            if ($chunk === false || $chunk === '') break;
-            $responseBody .= $chunk;
-        }
-
-        // Perform the TLS handshake over the now-prelogin-negotiated TCP connection.
-        // Use ANY_CLIENT to accommodate the full range of SQL Server TLS versions
-        // (SQL Server 2008-2014 often only speak TLS 1.0).
         $tlsOk = @stream_socket_enable_crypto($sock, true, STREAM_CRYPTO_METHOD_ANY_CLIENT);
-        if ($tlsOk !== true) {
-            // Collect any OpenSSL error for a useful message
-            $opensslErr = '';
-            while (($e = openssl_error_string()) !== false) {
-                $opensslErr .= ' ' . $e;
-            }
+
+        if ($tlsOk === true) {
+            // Direct TLS succeeded (Force Encryption mode)
+            $rawCerts = $extractCertsFromStream($sock);
             fclose($sock);
-            $detail = trim($opensslErr) ?: 'No additional OpenSSL error details available.';
-            throw new Exception("TLS handshake with MSSQL server failed. {$detail}", 500);
-        }
+        } else {
+            // Direct TLS failed - save error, close, then try TDS PRELOGIN path
+            $directTlsErr = $collectOpensslErrors();
+            fclose($sock);
 
-        // Extract the peer certificate chain captured during the handshake
-        $params = stream_context_get_params($sock);
-        $certChain = $params['options']['ssl']['peer_certificate_chain'] ?? [];
-        if (empty($certChain) && isset($params['options']['ssl']['peer_certificate'])) {
-            $certChain = [$params['options']['ssl']['peer_certificate']];
-        }
-        fclose($sock);
+            // Attempt 2: TDS PRELOGIN + TLS upgrade.
+            // Body: VERSION option (5B) + ENCRYPTION option (5B) + TERMINATOR (1B)
+            //     + VERSION data (6B) + ENCRYPTION data (1B) = 18 bytes total body.
+            // All offsets are relative to start of the prelogin body (after 8B TDS header).
+            $preloginBody = pack('C*',
+                0x00, 0x00, 0x0B, 0x00, 0x06,       // VERSION: offset=11, len=6
+                0x01, 0x00, 0x11, 0x00, 0x01,        // ENCRYPTION: offset=17, len=1
+                0xFF,                                 // TERMINATOR
+                0x0A, 0x00, 0x00, 0x00, 0x00, 0x00,  // VERSION data (10.0.0.0)
+                0x01                                  // ENCRYPTION: ENCRYPT_ON
+            );
+            $totalLen       = 8 + strlen($preloginBody);
+            $preloginPacket =
+                pack('CC', 0x12, 0x01) .  // Type: PRELOGIN, Status: EOM
+                pack('n',  $totalLen)   .  // Packet length (big-endian uint16)
+                pack('CC', 0x00, 0x00)  .  // SPID
+                pack('CC', 0x01, 0x00)  .  // PacketID, Window
+                $preloginBody;
 
-        if (empty($certChain)) {
-            throw new Exception("Connected to MSSQL server and TLS handshake succeeded, but could not capture the certificate chain. Ensure PHP is compiled with OpenSSL support.", 500);
-        }
-
-        foreach ($certChain as $certResource) {
-            $pem = '';
-            openssl_x509_export($certResource, $pem);
-            if (!empty(trim($pem))) {
-                $rawCerts[] = $pem;
+            $sock2 = @stream_socket_client(
+                "tcp://{$hostname}:{$port}",
+                $errno2, $errstr2, 10,
+                STREAM_CLIENT_CONNECT,
+                $sslContext
+            );
+            if (!$sock2) {
+                throw new Exception(
+                    "Direct TLS failed ({$directTlsErr}) and could not reconnect for TDS prelogin: {$errstr2} (errno {$errno2}).", 500
+                );
             }
+            stream_set_blocking($sock2, true);
+            stream_set_timeout($sock2, 10);
+
+            if (fwrite($sock2, $preloginPacket) === false) {
+                fclose($sock2);
+                throw new Exception("Failed to send TDS PRELOGIN packet to {$hostname}:{$port}.", 500);
+            }
+
+            // Read 8-byte TDS response header then drain the body
+            $respHdr  = '';
+            $deadline = time() + 10;
+            while (strlen($respHdr) < 8 && time() < $deadline) {
+                $chunk = fread($sock2, 8 - strlen($respHdr));
+                if ($chunk === false || $chunk === '') break;
+                $respHdr .= $chunk;
+            }
+            if (strlen($respHdr) < 8) {
+                fclose($sock2);
+                throw new Exception(
+                    "Direct TLS failed ({$directTlsErr}) and TDS PRELOGIN returned no response. " .
+                    "Ensure SQL Server TCP/IP is enabled and TLS is configured.", 500
+                );
+            }
+            $bodyLen  = max(0, ((ord($respHdr[2]) << 8) | ord($respHdr[3])) - 8);
+            $respBody = '';
+            while (strlen($respBody) < $bodyLen && time() < $deadline) {
+                $chunk = fread($sock2, $bodyLen - strlen($respBody));
+                if ($chunk === false || $chunk === '') break;
+                $respBody .= $chunk;
+            }
+
+            $tls2Ok = @stream_socket_enable_crypto($sock2, true, STREAM_CRYPTO_METHOD_ANY_CLIENT);
+            if ($tls2Ok !== true) {
+                $preloginTlsErr = $collectOpensslErrors();
+                fclose($sock2);
+                throw new Exception(
+                    "Both TLS approaches failed for {$hostname}:{$port}. " .
+                    "Direct TLS: {$directTlsErr}. " .
+                    "TDS prelogin TLS: {$preloginTlsErr}.", 500
+                );
+            }
+
+            $rawCerts = $extractCertsFromStream($sock2);
+            fclose($sock2);
         }
 
         if (empty($rawCerts)) {
-            throw new Exception("Connected to MSSQL server but failed to export certificates to PEM format.", 500);
+            throw new Exception("Connected to MSSQL server and TLS succeeded, but could not capture the certificate chain.", 500);
         }
 
-        // Resolve the connected IP for display
+        // Resolve IP for display
         $connectedIp = gethostbyname($hostname);
         if ($connectedIp === $hostname) {
             $connectedIp = null;
