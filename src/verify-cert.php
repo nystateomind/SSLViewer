@@ -318,6 +318,8 @@ try {
         $starttlsProtocol = 'smtp';
     } elseif ($port === 21) {
         $starttlsProtocol = 'ftp';
+    } elseif ($port === 1433) {
+        $starttlsProtocol = 'mssql';
     }
 
     if ($starttlsProtocol !== null) {
@@ -758,15 +760,14 @@ try {
             $chainStatus['issues'][] = "Self-signed certificate detected: {$cert['commonName']}";
         }
 
-        // Check if hostname is in SAN (only for leaf certificate)
+        // Check if hostname is in the leaf certificate (index 0 only)
         if ($index === 0) {
             $isIpAddress = filter_var($hostname, FILTER_VALIDATE_IP) !== false;
-            // Check CN
-            if (strcasecmp($cert['commonName'], $hostname) === 0) {
-                $hostnameInSan = true;
-            }
-            // Check SANs
-            if (!empty($cert['alternativeNames'])) {
+            $hasSans = !empty($cert['alternativeNames']);
+
+            if ($hasSans) {
+                // RFC 6125 §6.4.4: When SANs are present, validate against SANs ONLY.
+                // The CN MUST NOT be used for hostname matching.
                 foreach ($cert['alternativeNames'] as $san) {
                     $san = trim($san);
                     // Exact match (covers both DNS names and IP addresses)
@@ -792,6 +793,12 @@ try {
                             break;
                         }
                     }
+                }
+            } else {
+                // Legacy fallback (RFC 6125 §6.4.4): no SANs present, check CN only.
+                // Modern certificates should always include SANs.
+                if (strcasecmp($cert['commonName'], $hostname) === 0) {
+                    $hostnameInSan = true;
                 }
             }
         }

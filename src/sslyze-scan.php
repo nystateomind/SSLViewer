@@ -169,6 +169,8 @@ try {
         $starttlsOption = '--starttls=smtp';
     } elseif ($port === 21) {
         $starttlsOption = '--starttls=ftp';
+    } elseif ($port === 1433) {
+        $starttlsOption = '--starttls=mssql';
     }
     if ($starttlsOption !== '') {
         $command = "sslyze --json_out=- {$starttlsOption} {$target} 2>&1";
