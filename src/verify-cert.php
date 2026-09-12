@@ -13,7 +13,7 @@ if (file_exists(__DIR__ . '/enterprise-config.php')) {
 }
 
 // Set PHP execution time limit as failsafe (30 seconds max)
-set_time_limit(20);
+set_time_limit(30);
 
 // Set the content type to JSON for all responses
 header("Content-Type: application/json");
@@ -320,8 +320,8 @@ try {
     } elseif ($port === 21) {
         $starttlsProtocol = 'ftp';
     }
-    // Note: MSSQL (port 1433) is handled separately below via native PHP sockets
-    // because openssl s_client does not support -starttls mssql.
+    // Note: MSSQL (port 1433) is handled separately below via a Python helper
+    // because the TLS handshake must be wrapped in TDS packets (type 0x12).
 
     if ($isMssql) {
         // --- MSSQL: TDS-framed TLS via Python helper ---
