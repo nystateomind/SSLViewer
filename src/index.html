@@ -938,7 +938,7 @@
 
                         chainHtml += `
                             <div style="margin-left: ${indent}px" class="flex items-center py-0.5">
-                                ${arrow}<a href="#${certId}" class="${linkClass} transition-colors"><span class="opacity-60">${typeLabel}:</span> <span class="${cnClass}">${certDisplayName(cert)}</span>${statusText}</a>
+                                ${(() => { const d = certDisplayName(cert); return `${arrow}<a href="#${certId}" class="${linkClass} transition-colors"><span class="opacity-60">${typeLabel}:</span> <span class="${cnClass}">${d.name}</span>${d.isFallback ? '<span class="opacity-40 text-xs ml-1">(CN not set)</span>' : ''}${statusText}</a>`; })()}
                             </div>
                         `;
                         
@@ -1156,15 +1156,17 @@
             };
 
             // Returns the most meaningful display name for a certificate.
-            // When CN is absent, falls back to the first SAN, then a clear label.
+            // When CN is absent, falls back to the first SAN with a flag so
+            // callers can indicate the CN itself is not set.
             const certDisplayName = (cert) => {
                 const cn = cert.commonName;
-                if (cn && cn !== 'N/A') return cn;
+                const cnBlank = !cn || cn === 'N/A';
+                if (!cnBlank) return { name: cn, isFallback: false };
                 if (cert.alternativeNames && cert.alternativeNames.length > 0) {
                     const firstSan = cert.alternativeNames[0].trim();
-                    if (firstSan) return firstSan;
+                    if (firstSan) return { name: firstSan, isFallback: true };
                 }
-                return '(No Common Name)';
+                return { name: '(No Common Name)', isFallback: true };
             };
 
             const renderCertificates = (certificates) => {
@@ -1200,7 +1202,7 @@
                         titleSpan.className = 'flex items-center text-lg leading-6 font-medium text-slate-900 dark:text-white';
                         titleSpan.innerHTML = `
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="cert-icon mr-2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                            ${certTypeHTML}: <span class="cert-common-name ml-2 text-slate-700 dark:text-slate-300 font-normal">${certDisplayName(cert)}</span>
+                            ${(() => { const d = certDisplayName(cert); return `${certTypeHTML}: <span class="cert-common-name ml-2 text-slate-700 dark:text-slate-300 font-normal">${d.name}</span>${d.isFallback ? '<span class="text-slate-400 dark:text-slate-500 text-xs ml-1 font-normal">(CN not set)</span>' : ''}`; })()}
                         `;
 
                         // Right side: visible download button (icon only)
@@ -1230,10 +1232,11 @@
                         cardNode.querySelector('.cert-icon').classList.add('text-slate-400', 'dark:text-slate-500');
                     }
 
-                    const cnDisplay = cert.commonName && cert.commonName !== 'N/A'
+                    const cnIsSet = cert.commonName && cert.commonName !== 'N/A';
+                    const cnRowValue = cnIsSet
                         ? cert.commonName
-                        : certDisplayName(cert);
-                    dl.appendChild(createDetailRow('Common Name', cnDisplay));
+                        : '<span class="text-slate-400 dark:text-slate-500 italic">(not set)</span>';
+                    dl.appendChild(createDetailRow('Common Name', cnRowValue));
                     if (cert.organization && cert.organization !== 'N/A') {
                         dl.appendChild(createDetailRow('Organization', cert.organization));
                     }
