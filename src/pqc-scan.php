@@ -176,6 +176,12 @@ function parsePqcOutput($output, $group)
     if (preg_match('/Negotiated TLS1\.3 group:\s*([^\r\n]+)/i', $output, $matches)) {
         $negotiatedGroup = trim($matches[1]);
 
+        // <NULL> means the server rejected our PQC group and fell back (or handshake failed)
+        if ($negotiatedGroup === '<NULL>') {
+            $result['error'] = 'Server rejected PQC group (handshake fallback to non-PQC group)';
+            return $result;
+        }
+
         if (preg_match('/(MLKEM|Kyber|ML-KEM)/i', $negotiatedGroup)) {
             $result['supported'] = true;
             $result['negotiatedGroup'] = $negotiatedGroup;
@@ -183,8 +189,10 @@ function parsePqcOutput($output, $group)
         }
     }
 
-    // Pattern 1: "Server Temp Key:" - older OpenSSL
-    if (preg_match('/Server Temp Key:\s*([^\r\n]+)/i', $output, $matches)) {
+    // Pattern 1: Key exchange temp key line.
+    // OpenSSL 1.x / TLS 1.2 uses "Server Temp Key:"
+    // OpenSSL 3.x TLS 1.3 (non-PQC fallback) uses "Peer Temp Key:"
+    if (preg_match('/(?:Server|Peer) Temp Key:\s*([^\r\n]+)/i', $output, $matches)) {
         $tempKey = trim($matches[1]);
 
         if (preg_match('/(MLKEM|Kyber|X25519MLKEM|X25519Kyber|ML-KEM)/i', $tempKey)) {
@@ -312,6 +320,12 @@ function testPqcGroup($hostname, $port, $group)
     if (preg_match('/Negotiated TLS1\.3 group:\s*([^\r\n]+)/i', $output, $matches)) {
         $negotiatedGroup = trim($matches[1]);
 
+        // <NULL> means the server rejected our PQC group and fell back (or handshake failed)
+        if ($negotiatedGroup === '<NULL>') {
+            $result['error'] = 'Server rejected PQC group (handshake fallback to non-PQC group)';
+            return $result;
+        }
+
         // Check if it's a PQC/hybrid group
         if (preg_match('/(MLKEM|Kyber|ML-KEM)/i', $negotiatedGroup)) {
             $result['supported'] = true;
@@ -320,8 +334,10 @@ function testPqcGroup($hostname, $port, $group)
         }
     }
 
-    // Pattern 1: "Server Temp Key:" line showing the key exchange (older OpenSSL)
-    if (preg_match('/Server Temp Key:\s*([^\r\n]+)/i', $output, $matches)) {
+    // Pattern 1: Key exchange temp key line.
+    // OpenSSL 1.x / TLS 1.2 uses "Server Temp Key:"
+    // OpenSSL 3.x TLS 1.3 (non-PQC fallback) uses "Peer Temp Key:"
+    if (preg_match('/(?:Server|Peer) Temp Key:\s*([^\r\n]+)/i', $output, $matches)) {
         $tempKey = trim($matches[1]);
 
         // Check if the temp key indicates PQC/hybrid exchange
