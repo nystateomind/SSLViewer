@@ -10,3 +10,6 @@ Thumbs.db
 # Backup files
 *.bak
 *.orig
+
+# Explicitly track bundled vendor JS (may be excluded by global gitignore rules)
+!src/forge.min.js
