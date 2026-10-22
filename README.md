@@ -9,7 +9,7 @@ A web-based toolkit for analyzing SSL/TLS certificates, decoding PEM files, and 
 - Validates certificate installation and chain completeness
 - Detects expired certificates, self-signed certs, and hostname mismatches
 - OCSP and CRL revocation checking
-- CDN/WAF detection (Akamai, Cloudflare, AWS, Azure, etc.)
+- CDN/WAF detection (Akamai, Cloudflare, AWS, etc.)
 - STARTTLS support for SMTP (25/587), FTP (21), and PostgreSQL (5432)
 
 ### 📄 PEM Decoder
