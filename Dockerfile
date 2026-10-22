@@ -18,15 +18,16 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Build and install OpenSSL 3.4 from source (enables PQC / ML-KEM groups)
-RUN wget -q https://www.openssl.org/source/openssl-3.4.1.tar.gz \
-    && tar -xzf openssl-3.4.1.tar.gz \
-    && cd openssl-3.4.1 \
+# Build and install OpenSSL 3.5 from source (first version with native ML-KEM / X25519MLKEM768)
+# OpenSSL 3.4.x requires the external oqs-provider for PQC; 3.5+ has it built-in
+RUN wget -q https://www.openssl.org/source/openssl-3.5.0.tar.gz \
+    && tar -xzf openssl-3.5.0.tar.gz \
+    && cd openssl-3.5.0 \
     && ./config --prefix=/usr/local/openssl --openssldir=/usr/local/openssl shared zlib \
     && make -j"$(nproc)" \
     && make install_sw \
     && cd .. \
-    && rm -rf openssl-3.4.1 openssl-3.4.1.tar.gz \
+    && rm -rf openssl-3.5.0 openssl-3.5.0.tar.gz \
     && ldconfig
 
 # Make the new openssl the default for shell commands (used by pqc-scan.php)
