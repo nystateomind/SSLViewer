@@ -14,13 +14,15 @@ ARG OPENSSL_SHA256=344d0a79f1a9b08029b0744e2cc401a43f9c90acd1044d09a530b4885a8e9
 
 RUN apt-get update && apt-get install -y \
     build-essential \
+    ca-certificates \
+    zlib1g-dev \
     wget \
     perl \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Download, verify checksum, build
-RUN wget -q "https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz" \
+RUN wget -nv "https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz" \
     && echo "${OPENSSL_SHA256}  openssl-${OPENSSL_VERSION}.tar.gz" | sha256sum -c - \
     && tar -xzf "openssl-${OPENSSL_VERSION}.tar.gz" \
     && cd "openssl-${OPENSSL_VERSION}" \
@@ -47,7 +49,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Register the new OpenSSL shared libs and make it the default CLI binary
-RUN echo "/usr/local/openssl/lib64" >> /etc/ld.so.conf.d/openssl-3.5.conf \
+RUN { \
+        echo "/usr/local/openssl/lib"; \
+        echo "/usr/local/openssl/lib64"; \
+    } >> /etc/ld.so.conf.d/openssl-3.5.conf \
     && ldconfig \
     && update-alternatives --install /usr/bin/openssl openssl /usr/local/openssl/bin/openssl 100
 
