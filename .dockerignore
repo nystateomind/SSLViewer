@@ -14,6 +14,11 @@ README*
 venv
 __pycache__
 
+# Sensitive files - NEVER bake into image layers
+src/key.pem
+src/cert.pem
+src/server.log
+
 # Docker files (no need to copy into image)
 Dockerfile
 .dockerignore
